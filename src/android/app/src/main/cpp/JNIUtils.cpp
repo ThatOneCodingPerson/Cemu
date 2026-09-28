@@ -1,6 +1,63 @@
 #include "JNIUtils.h"
+#include "util/helpers/helpers.h"
 
 static JavaVM* s_jvm = nullptr;
+
+namespace
+{
+	thread_local bool t_isJNIWorker = false;
+
+	// Persistent JVM-attached threads for JNIUtils::FiberSafeJNICall. A few of them so a slow SAF call doesn't delay
+	// e.g. rumble. Intentionally never destroyed (the process ends with _exit).
+	class JNIWorkerPool
+	{
+	  public:
+		static constexpr size_t WORKER_COUNT = 4;
+
+		JNIWorkerPool()
+		{
+			for (size_t i = 0; i < WORKER_COUNT; i++)
+				std::thread(&JNIWorkerPool::WorkerLoop, this, i).detach();
+		}
+
+		void Enqueue(std::function<void()> task)
+		{
+			{
+				std::scoped_lock lock(m_mutex);
+				m_tasks.emplace_back(std::move(task));
+			}
+			m_taskAvailable.notify_one();
+		}
+
+	  private:
+		void WorkerLoop(size_t index)
+		{
+			SetThreadName(fmt::format("JNIWorker{}", index).c_str());
+			t_isJNIWorker = true;
+			while (true)
+			{
+				std::function<void()> task;
+				{
+					std::unique_lock lock(m_mutex);
+					m_taskAvailable.wait(lock, [this] { return !m_tasks.empty(); });
+					task = std::move(m_tasks.front());
+					m_tasks.pop_front();
+				}
+				task();
+			}
+		}
+
+		std::mutex m_mutex;
+		std::condition_variable m_taskAvailable;
+		std::deque<std::function<void()>> m_tasks;
+	};
+
+	JNIWorkerPool& GetJNIWorkerPool()
+	{
+		static JNIWorkerPool* s_pool = new JNIWorkerPool();
+		return *s_pool;
+	}
+} // namespace
 
 namespace JNIUtils
 {
@@ -103,6 +160,28 @@ namespace JNIUtils
 		Scopedjobject enumObj = Scopedjobject(enumValue);
 		env->DeleteLocalRef(enumValue);
 		return enumObj;
+	}
+
+	void RunOnJNIWorker(const std::function<void(JNIEnv*)>& task)
+	{
+		// a Java callback running on a worker that calls back into native code must not wait for another worker
+		if (t_isJNIWorker)
+		{
+			task(GetEnv());
+			return;
+		}
+		std::mutex doneMutex;
+		std::condition_variable doneCondition;
+		bool done = false;
+		GetJNIWorkerPool().Enqueue([&] {
+			task(GetEnv());
+			// notify while holding the lock: the waiter destroys doneCondition as soon as it can return
+			std::scoped_lock lock(doneMutex);
+			done = true;
+			doneCondition.notify_one();
+		});
+		std::unique_lock lock(doneMutex);
+		doneCondition.wait(lock, [&] { return done; });
 	}
 
 	JNIEnv* GetEnv()

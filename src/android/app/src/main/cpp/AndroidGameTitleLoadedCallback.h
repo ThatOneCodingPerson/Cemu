@@ -44,6 +44,8 @@ class AndroidGameTitleLoadedCallback : public GameTitleLoadedCallback
 			jintArray jIconData = env->NewIntArray(icon->width * icon->height);
 			env->SetIntArrayRegion(jIconData, 0, icon->width * icon->height, icon->colors);
 			bitmap = env->CallStaticObjectMethod(*m_bitmapClass, m_createBitmapMID, jIconData, icon->width, icon->height, *m_bitmapFormat);
+			if (JNIUtils::CheckAndClearException(env))
+				bitmap = nullptr;
 			env->DeleteLocalRef(jIconData);
 		}
 
@@ -63,6 +65,7 @@ class AndroidGameTitleLoadedCallback : public GameTitleLoadedCallback
 			game.isFavorite,
 			bitmap);
 		env->CallVoidMethod(*m_gameTitleLoadedCallbackObj, m_onGameTitleLoadedMID, gamejobject);
+		JNIUtils::CheckAndClearException(env);
 		env->DeleteLocalRef(gamejobject);
 		if (bitmap != nullptr)
 			env->DeleteLocalRef(bitmap);

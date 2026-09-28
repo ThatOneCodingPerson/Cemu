@@ -18,6 +18,8 @@ class AndroidFilesystemCallbacks : public FilesystemAndroid::FilesystemCallbacks
 		JNIUtils::FiberSafeJNICall([&](JNIEnv* env) {
 			jstring uriString = JNIUtils::ToJString(env, uri);
 			result = env->CallStaticBooleanMethod(*m_fileUtilClass, methodId, uriString);
+			if (JNIUtils::CheckAndClearException(env))
+				result = false;
 			env->DeleteLocalRef(uriString);
 		});
 		return result;

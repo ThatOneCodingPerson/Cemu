@@ -255,6 +255,19 @@ class EmulationViewModel(
             return
         }
 
+        if (EmulationProcessState.runningGamePath != null) {
+            // This activity replaced one whose title still runs in this process (e.g. relaunched from a
+            // shortcut). Launching again isn't possible, attach to it instead. It was paused when the old
+            // activity's surface went away, resume once ours is there.
+            isTitleLaunched = true
+            isPausedBySurfaceLoss = true
+            if (isMainSurfaceAvailable) {
+                resumeAfterSurfaceLoss()
+            }
+            _isEmulationInitialized.value = true
+            return
+        }
+
         emulationInitializationJob = viewModelScope.launch {
             prepareTitle()
                 .bind { initializeSystems() }
@@ -263,6 +276,7 @@ class EmulationViewModel(
                 .fold(
                     onSuccess = {
                         isTitleLaunched = true
+                        EmulationProcessState.runningGamePath = launchPath
                         // the app may have been sent to the background while loading
                         if (!isMainSurfaceAvailable) {
                             pauseForSurfaceLoss()

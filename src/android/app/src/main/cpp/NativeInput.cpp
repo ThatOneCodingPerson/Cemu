@@ -29,6 +29,7 @@ namespace NativeInput
 			JNIUtils::FiberSafeJNICall([&](JNIEnv* env) {
 				jstring deviceDescriptorJstring = JNIUtils::ToJString(env, deviceDescriptor);
 				env->CallVoidMethod(*m_callbacksObject, m_vibrateControllerMId, deviceDescriptorJstring, milliseconds, amplitude);
+				JNIUtils::CheckAndClearException(env);
 				env->DeleteLocalRef(deviceDescriptorJstring);
 			});
 		}
@@ -38,6 +39,7 @@ namespace NativeInput
 			JNIUtils::FiberSafeJNICall([&](JNIEnv* env) {
 				jstring deviceDescriptorJstring = JNIUtils::ToJString(env, deviceDescriptor);
 				env->CallVoidMethod(*m_callbacksObject, m_cancelControllerVibrationMId, deviceDescriptorJstring);
+				JNIUtils::CheckAndClearException(env);
 				env->DeleteLocalRef(deviceDescriptorJstring);
 			});
 		}
@@ -64,6 +66,7 @@ namespace NativeInput
 		{
 			JNIUtils::FiberSafeJNICall([&](JNIEnv* env) {
 				env->CallVoidMethod(*m_callbacksObject, m_vibrateMId, milliseconds, static_cast<jint>(rumble * 255.0f));
+				JNIUtils::CheckAndClearException(env);
 			});
 		}
 
@@ -71,6 +74,7 @@ namespace NativeInput
 		{
 			JNIUtils::FiberSafeJNICall([&](JNIEnv* env) {
 				env->CallVoidMethod(*m_callbacksObject, m_cancelVibrationMId);
+				JNIUtils::CheckAndClearException(env);
 			});
 		}
 

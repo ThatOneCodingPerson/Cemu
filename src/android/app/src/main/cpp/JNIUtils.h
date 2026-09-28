@@ -1,24 +1,32 @@
 #pragma once
 
 #include <jni.h>
+#include <boost/nowide/utf/convert.hpp>
 
 namespace JNIUtils
 {
 	void SetJavaVM(JavaVM* jvm);
 
+	// Java's *UTF chars functions use modified UTF-8 (characters outside the BMP such as emoji become two 3-byte
+	// surrogates), which mangles such paths and names. Convert via UTF-16 instead.
 	inline std::string FromJString(JNIEnv* env, jstring jstr)
 	{
 		if (jstr == nullptr)
 			return {};
-		const char* c_str = env->GetStringUTFChars(jstr, nullptr);
-		std::string str(c_str);
-		env->ReleaseStringUTFChars(jstr, c_str);
+		const jsize length = env->GetStringLength(jstr);
+		const jchar* chars = env->GetStringChars(jstr, nullptr);
+		if (chars == nullptr)
+			return {};
+		const auto* utf16 = reinterpret_cast<const char16_t*>(chars);
+		std::string str = boost::nowide::utf::convert_string<char>(utf16, utf16 + length);
+		env->ReleaseStringChars(jstr, chars);
 		return str;
 	}
 
 	inline jstring ToJString(JNIEnv* env, const std::string& str)
 	{
-		return env->NewStringUTF(str.c_str());
+		const std::u16string utf16 = boost::nowide::utf::convert_string<char16_t>(str.data(), str.data() + str.size());
+		return env->NewString(reinterpret_cast<const jchar*>(utf16.data()), static_cast<jsize>(utf16.size()));
 	}
 
 	inline jstring ToJString(JNIEnv* env, std::string_view str)
@@ -48,6 +56,18 @@ namespace JNIUtils
 	}
 
 	JNIEnv* GetEnv();
+
+	// Must be called after calling into Java from native code. A pending exception makes the next JNI call abort,
+	// and on natively attached threads it takes the app down when the thread detaches. Logs and clears it.
+	// Returns whether an exception was pending.
+	inline bool CheckAndClearException(JNIEnv* env)
+	{
+		if (!env->ExceptionCheck())
+			return false;
+		env->ExceptionDescribe(); // prints the Java stack trace to logcat
+		env->ExceptionClear();
+		return true;
+	}
 
 	class Scopedjobject
 	{
@@ -176,7 +196,7 @@ namespace JNIUtils
 			env,
 			elementClass,
 			range,
-			[env](const std::string& str) -> jstring { return env->NewStringUTF(str.c_str()); });
+			[env](const std::string& str) -> jstring { return ToJString(env, str); });
 
 		env->DeleteLocalRef(elementClass);
 
@@ -207,10 +227,14 @@ namespace JNIUtils
 		return obj;
 	}
 
+	// runs task synchronously on one of a few persistent JVM-attached worker threads
+	void RunOnJNIWorker(const std::function<void(JNIEnv*)>& task);
+
+	// JNI must not be used from fiber stacks (the PPC threads run on fibers), so the call is executed on a worker
+	// thread and this waits for it. Workers are reused: creating and attaching a thread per call (SAF accesses,
+	// rumble every frame) was slow.
 	inline void FiberSafeJNICall(std::invocable<JNIEnv*> auto func)
 	{
-		std::jthread([&]() {
-			func(GetEnv());
-		});
+		RunOnJNIWorker(func);
 	}
 } // namespace JNIUtils

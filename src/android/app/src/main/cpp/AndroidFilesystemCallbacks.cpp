@@ -17,6 +17,8 @@ int AndroidFilesystemCallbacks::OpenContentUri(const std::filesystem::path& uri)
 	JNIUtils::FiberSafeJNICall([&](JNIEnv* env) {
 		jstring uriString = JNIUtils::ToJString(env, uri);
 		fd = env->CallStaticIntMethod(*m_fileUtilClass, m_openContentUriMid, uriString);
+		if (JNIUtils::CheckAndClearException(env))
+			fd = -1;
 		env->DeleteLocalRef(uriString);
 	});
 	return fd;
@@ -29,12 +31,16 @@ std::vector<std::filesystem::path> AndroidFilesystemCallbacks::ListFiles(const s
 		jstring uriString = JNIUtils::ToJString(env, uri);
 		jobjectArray pathsObjArray = static_cast<jobjectArray>(env->CallStaticObjectMethod(*m_fileUtilClass, m_listFilesMid, uriString));
 		env->DeleteLocalRef(uriString);
+		// e.g. the SAF permission was revoked; GetArrayLength(null) with a pending exception would abort
+		if (JNIUtils::CheckAndClearException(env) || pathsObjArray == nullptr)
+			return;
 		jsize arrayLength = env->GetArrayLength(pathsObjArray);
 		paths.reserve(arrayLength);
 		for (jsize i = 0; i < arrayLength; i++)
 		{
 			jstring pathStr = static_cast<jstring>(env->GetObjectArrayElement(pathsObjArray, i));
-			paths.push_back(JNIUtils::FromJString(env, pathStr));
+			if (pathStr != nullptr)
+				paths.push_back(JNIUtils::FromJString(env, pathStr));
 			env->DeleteLocalRef(pathStr);
 		}
 		env->DeleteLocalRef(pathsObjArray);

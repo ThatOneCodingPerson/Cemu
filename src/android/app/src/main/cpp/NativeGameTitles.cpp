@@ -231,6 +231,7 @@ class SaveListCallback
 			metaInfo->GetTitleVersion(),
 			metaInfo->GetRegion());
 		env->CallVoidMethod(*m_saveListCallbackObj, m_onSaveDiscoveredMID, saveData);
+		JNIUtils::CheckAndClearException(env);
 		env->DeleteLocalRef(saveData);
 		env->DeleteLocalRef(nameJava);
 		env->DeleteLocalRef(pathJava);
@@ -296,6 +297,7 @@ class TitleListCallbacks
 			titleInfo.GetFormat());
 
 		env->CallVoidMethod(*m_titleListCallbacksObj, m_onTitleDiscoveredMID, titleData);
+		JNIUtils::CheckAndClearException(env);
 
 		env->DeleteLocalRef(titleData);
 		env->DeleteLocalRef(nameJava);
@@ -304,7 +306,9 @@ class TitleListCallbacks
 
 	void OnTitleRemoved(TitleInfo& titleInfo)
 	{
-		JNIUtils::GetEnv()->CallVoidMethod(*m_titleListCallbacksObj, m_onTitleRemovedMID, titleInfo.GetUID());
+		JNIEnv* env = JNIUtils::GetEnv();
+		env->CallVoidMethod(*m_titleListCallbacksObj, m_onTitleRemovedMID, titleInfo.GetUID());
+		JNIUtils::CheckAndClearException(env);
 	}
 
 	void HandleTitleListCallback(CafeTitleListCallbackEvent* evt)

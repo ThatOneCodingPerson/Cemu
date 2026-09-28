@@ -11,10 +11,14 @@ CompressTitleCallbacks::CompressTitleCallbacks(jobject compressTitleCallbacks)
 
 void CompressTitleCallbacks::OnFinished()
 {
-	JNIUtils::GetEnv()->CallVoidMethod(*m_compressTitleCallbacks, m_onFinishedMID);
+	JNIEnv* env = JNIUtils::GetEnv();
+	env->CallVoidMethod(*m_compressTitleCallbacks, m_onFinishedMID);
+	JNIUtils::CheckAndClearException(env);
 }
 
 void CompressTitleCallbacks::OnError()
 {
-	JNIUtils::GetEnv()->CallVoidMethod(*m_compressTitleCallbacks, m_onErrorMID);
+	JNIEnv* env = JNIUtils::GetEnv();
+	env->CallVoidMethod(*m_compressTitleCallbacks, m_onErrorMID);
+	JNIUtils::CheckAndClearException(env);
 }

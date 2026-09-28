@@ -62,16 +62,20 @@ object NativeFiles {
         return -1
     }
 
+    // These are called from native code: they must never throw (a pending exception aborts the native
+    // caller), failures are reported as "not found"/empty instead.
+
     @Keep
     @JvmStatic
     fun listFiles(uri: String): Array<String?> {
         val files = ArrayList<String>()
-        val directoryUri = uri.fromNativePath()
-        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(
-            directoryUri,
-            DocumentsContract.getDocumentId(directoryUri)
-        )
         try {
+            val directoryUri = uri.fromNativePath()
+            // throws IllegalArgumentException for URIs that aren't tree/document URIs
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(
+                directoryUri,
+                DocumentsContract.getDocumentId(directoryUri)
+            )
             contentResolver.query(
                 childrenUri,
                 arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID),
@@ -94,19 +98,27 @@ object NativeFiles {
         return filesArray
     }
 
+    /** Mime type of the document, null if it doesn't exist or isn't accessible. */
+    private fun getMimeType(uri: String): String? = try {
+        contentResolver.getType(uri.fromNativePath())
+    } catch (e: Exception) {
+        Log.d("NativeFiles", "Cannot get type of $uri: ${e.message}")
+        null
+    }
+
     @Keep
     @JvmStatic
     fun isDirectory(uri: String): Boolean {
-        val mimeType = contentResolver.getType(
-            uri.fromNativePath()
-        )
-        return DocumentsContract.Document.MIME_TYPE_DIR == mimeType
+        return getMimeType(uri) == DocumentsContract.Document.MIME_TYPE_DIR
     }
 
     @Keep
     @JvmStatic
     fun isFile(uri: String): Boolean {
-        return !isDirectory(uri)
+        // a missing or inaccessible document is neither a file nor a directory. Some providers
+        // don't report a type for existing files, so check existence in that case
+        val mimeType = getMimeType(uri) ?: return exists(uri)
+        return mimeType != DocumentsContract.Document.MIME_TYPE_DIR
     }
 
     @Keep

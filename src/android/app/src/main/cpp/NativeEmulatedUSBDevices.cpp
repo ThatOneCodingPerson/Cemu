@@ -78,8 +78,8 @@ namespace NativeEmulatedUSBDevices
 				return env->NewObject(
 					figureClass,
 					ctrMID,
-					env->NewStringUTF(figurePath.stem().c_str()),
-					env->NewStringUTF(figurePath.c_str()));
+					JNIUtils::ToJString(env, _pathToUtf8(figurePath.stem())),
+					JNIUtils::ToJString(env, _pathToUtf8(figurePath)));
 			});
 	}
 

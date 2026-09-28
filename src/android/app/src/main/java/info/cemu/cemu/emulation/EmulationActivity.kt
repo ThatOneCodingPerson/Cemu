@@ -1,10 +1,12 @@
 package info.cemu.cemu.emulation
 
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
@@ -20,6 +22,7 @@ import info.cemu.cemu.common.emulation.EmulationSessionState
 import info.cemu.cemu.common.settings.AppSettingsStore
 import info.cemu.cemu.common.ui.components.ActivityContent
 import info.cemu.cemu.common.ui.localization.TranslatableContent
+import info.cemu.cemu.common.ui.localization.tr
 import info.cemu.cemu.emulation.input.ControllerCallbacks
 import info.cemu.cemu.emulation.input.ControllerMotionHandler
 import info.cemu.cemu.emulation.input.DeviceControllerCallbacks
@@ -94,28 +97,26 @@ class EmulationActivity : AppCompatActivity() {
         return super.dispatchKeyEvent(event)
     }
 
-    private fun getGamePath(): String {
-        val extras = intent.extras
-        val data = intent.data
-        var launchPath: String? = null
-
-        if (extras != null) {
-            launchPath = extras.getString(EXTRA_LAUNCH_PATH)
-        }
-
-        if (launchPath == null && data != null) {
-            launchPath = data.toString()
-        }
-
-        if (launchPath == null) {
-            throw RuntimeException("launchPath is null")
-        }
-
-        return launchPath
+    private fun getGamePath(intent: Intent): String? {
+        return intent.extras?.getString(EXTRA_LAUNCH_PATH) ?: intent.data?.toString()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // the activity is exported (VIEW intents), so a launch without a game is possible
+        val requestedGamePath = getGamePath(intent)
+        if (requestedGamePath == null) {
+            Toast.makeText(this, tr("No game to launch"), Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+        // a title may still run in this process (see EmulationProcessState); only one title per process
+        val runningGamePath = EmulationProcessState.runningGamePath
+        if (runningGamePath != null && runningGamePath != requestedGamePath) {
+            showGameAlreadyRunningMessage()
+        }
+        val gamePath = runningGamePath ?: requestedGamePath
 
         EmulationSessionState.onSessionStarted(this)
         DisplayUtils.init(this)
@@ -126,8 +127,6 @@ class EmulationActivity : AppCompatActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         setFullscreen()
-
-        val gamePath = getGamePath()
 
         setContent {
             TranslatableContent {
@@ -143,6 +142,23 @@ class EmulationActivity : AppCompatActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // singleTop: a launch while this activity is on top. The running title can't be replaced in-process
+        val newGamePath = getGamePath(intent)
+        if (newGamePath != null && newGamePath != EmulationProcessState.runningGamePath) {
+            showGameAlreadyRunningMessage()
+        }
+    }
+
+    private fun showGameAlreadyRunningMessage() {
+        Toast.makeText(
+            this,
+            tr("Another game is already running. Quit it from the menu first."),
+            Toast.LENGTH_LONG
+        ).show()
+    }
+
     override fun onPause() {
         super.onPause()
 
@@ -156,7 +172,9 @@ class EmulationActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        EmulationSessionState.onSessionStopped(this)
+        if (::inputManager.isInitialized) {
+            EmulationSessionState.onSessionStopped(this)
+        }
         super.onDestroy()
     }
 
