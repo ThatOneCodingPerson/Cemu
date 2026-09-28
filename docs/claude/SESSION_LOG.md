@@ -54,8 +54,7 @@ Format: date · what was done · what's next · open questions. Keep each entry 
 **Artifact:** `dist/android/output/Cemu-0.5.1-92ecc623-dev.apk`. `:app:testDebugUnitTest` passes. AGP 9 only has unit-test tasks for debug, so there is no `testDevUnitTest`.
 
 **Lessons for next time:**
-- Edit CRLF files with the Edit tool or the `$TEMP/crlfedit.py` helper; `
-` inside Python heredocs turns into real newlines.
+- Edit CRLF files with the Edit tool or the `$TEMP/crlfedit.py` helper; a backslash-n escape inside Python heredocs turns into a real newline, so use the Edit tool for any string containing escapes.
 - Don't edit native sources while a build is compiling.
 
 **Next:**

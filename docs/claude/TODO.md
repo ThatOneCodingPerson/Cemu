@@ -13,7 +13,7 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 
 ## Current focus
 - **Phase 1 is built and awaiting the owner's device test.** APK: `dist/android/output/Cemu-0.5.1-92ecc623-dev.apk`.
-- Next: Phase 2 (surface lifecycle), per `PHASE2_DESIGN.md`.
+- Phases 1–4 are built and awaiting device tests (latest APK `dist/android/output/Cemu-latest-dev.apk`). Next: Phase 5 (dual screen), Phase 6 (performance), Phase 7 (research write-up).
 - **Blocker for the adb workflow:** the Thor has no USB debugging yet. As of 2026-09-28 it enumerates as MTP only (USB PID 4EE1) and `adb devices` is empty. The owner was asked to enable it.
 
 ---
@@ -58,46 +58,66 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
   4. Optional: select a custom driver whose folder is broken or empty. You should get a dialog, and the game should still boot on the system driver.
   5. Report any crash; then I run `pull-logs.ps1`, since the tombstone and `crash.txt` should now exist.
 
-## Phase 2: surface/swapchain lifecycle (design: PHASE2_DESIGN.md)
-- [ ] Research: Azahar PR #2425 and #2399 diffs, NDK `native_window_jni.h` ownership note, VK_KHR_android_surface one-surface rule
-- [ ] WindowSystem `AndroidCanvasInfo` (window + generation + ack)
-- [ ] JNI `setSurface` / `clearSurface` (bounded wait); remove `initializeSurface` and `clearPadSurface`; fix `TestSurface` ref (A7)
-- [ ] SwapchainInfoVk owns its window ref; `RecreateSurface` destroys the old surface first (N6) and handles the pad (A6)
-- [ ] VulkanRenderer `SyncCanvasWindow` on the Latte thread at acquire and idle; ImGui fallback init; `ImguiBegin` order (N8); retryable recreate (N4)
-- [ ] Remove `StopUsingPadAndWait` on Android (A4, A5)
-- [ ] Pause and resume stop presents and audio (P5); `sTitlePaused` / `sSystemRunning` atomics (N15)
-- [ ] Swap screens applied on the Latte thread (D5, N9)
-- [ ] Kotlin: EmulationViewModel surface callbacks; launch waits for the main surface (K3); `initialized` only on success (A15)
-- [ ] Kotlin: Presentation keyed on display id (D4); `InvalidDisplayException` / `onDisplayRemoved` (D6)
-- [ ] Build, install, commit
-- **Device test:** run the whole matrix in PHASE2_DESIGN.md.
+## Phase 2: surface/swapchain lifecycle (design: PHASE2_DESIGN.md). Built in f333fe7a, awaiting device test
+- [x] Research (2026-09-28):
+  - NDK `native_window_jni.h` confirms `ANativeWindow_fromSurface` returns an acquired reference.
+  - Azahar PR #2425 (merged 2026) uses the same lessons: ignore duplicate `surfaceChanged` for the same window (NATIVE_WINDOW_IN_USE), release the old window, and serialize with renderer creation.
+- [?] WindowSystem `AndroidCanvasInfo` (window + generation + ack)
+- [?] JNI `setSurface` (dedupe, one reference) / `clearSurface` (500 ms bounded wait); `initializeSurface` and `clearPadSurface` removed; `TestSurface` reference fixed (A7)
+- [?] SwapchainInfoVk owns its window reference; `RecreateSurface` destroys first (N6) and works for the pad (A6)
+- [?] `VulkanRenderer::SyncCanvasWindow` on the GPU thread (acquire and idle); retry after 250 ms (N4); ImGui fallback init and re-init; `ImguiBegin` acquires first (N8)
+- [?] `StopUsingPadAndWait` removed on Android (A4, A5)
+- [?] Pause stops presenting and audio (P5); the GPU thread sleeps while paused instead of busy-spinning; `sTitlePaused` / `sSystemRunning` atomic (N15)
+- [?] Swap screens applied on the GPU thread (D5, N9)
+- [?] ViewModel: callbacks only publish; pause and resume follow the main surface; a title launched in the background gets paused (K3)
+- [?] Presentation keyed on display id (D4); `InvalidDisplayException` caught (D6)
+- [ ] A15 leftovers: `initialized` flag semantics and error codes (Phase 3)
+- **Device test:** run the matrix in PHASE2_DESIGN.md. The most important cases:
+  1. Rotate (if unlocked), press Home and return, 20 times in a row, mid-game: no crash, no freeze, and the game resumes with sound.
+  2. While a game loads, press Home, wait 10 s, then return: the game should not be running in the background (no audio). It continues when you're back.
+  3. Toggle "Show pad" 10 times quickly: no hang.
+  4. Thor: toggle "External PAD screen" on and off, "Swap screens", and "Rotate external screen left". The pad shows on the bottom screen and touch works.
+  5. Thor: turn the bottom screen off and on with the dual-screen button while playing: no crash.
+  6. Background the app for several minutes while paused: the battery shouldn't drain (the GPU thread no longer spins).
 
-## Phase 3: JNI, storage, lifecycle hardening
-- [ ] JNI `ExceptionCheck` everywhere; NativeFiles try blocks; `isFile` fix (A10)
-- [ ] Persistent JNI worker thread replaces `FiberSafeJNICall` (A11)
-- [ ] UTF-8 via byte arrays (N13); SAF path percent-decoding with a round-trip design (names containing `:`, spaces, unicode)
-- [ ] Manifest `configChanges` (A12); missing launch path handled (A15); `onNewIntent` (K2)
-- [ ] Quit flow: flush the pipeline cache atomically, DataStore, settings, save sync off the main thread (A13, D2)
-- [ ] Startup: hash written after the copy (A14); SAF sync off the main thread (D1); observer map thread-safe (D3)
-- [ ] Kotlin crash fixes K1, K4, K5, K6, K7, K8, K9, K10, K11
-- [ ] Main-thread I/O K12; native races N10, N11, N12, N16
-- [ ] Build, install, commit
+## Phase 3: JNI, storage, lifecycle hardening. Built in 91f156d3 and eae0b51f, awaiting device test
+- [?] JNI `CheckAndClearException` after every native→Kotlin call; NativeFiles never throws; `isFile` fixed (A10)
+- [?] Persistent JNI worker pool replaces per-call threads in `FiberSafeJNICall` (A11)
+- [?] UTF-8 conversion via UTF-16 (emoji-safe), null-safe (N13)
+- [ ] SAF path percent-decoding with a round-trip design (names containing `:`, spaces, unicode). Needs research and tests on the device.
+- [?] Manifest `configChanges` (A12); missing launch path handled (A15, partial); relaunch while running attaches to the running title (K2)
+- [?] Pipeline cache: atomic write, flush on quit (2 s max), save on pause (A13)
+- [?] Data files: hash written last, cross-process file lock (A14)
+- [!] **D1/D2 need an owner decision:** SAF save sync runs synchronously on the main thread at startup (every process, including each game launch) and on quit/background. The fix needs a design choice:
+  - (a) keep the sync but run it on a background thread, and gate game launch and the save UI on its completion (a "Syncing saves…" screen), or
+  - (b) only sync in the main process and before launch, with a progress dialog.
+  - Don't just move it off the main thread: a game could read or write saves mid-import and the export could overwrite newer data.
+- [?] D3 observer map thread-safe
+- [?] Kotlin crash fixes K1, K4, K5, K6, K7, K8, K9, K10, K11
+- [?] Native races N10, N11, N12
+- [ ] D7 cross-process "is emulation running" state (main process can't see the emulation process)
+- [ ] K13 title install: foreground service / WorkManager; K14 WUA compression uses the filtered list; K15 account deletion
 - **Device test:**
-  - A game in a folder whose name contains `:`.
-  - Connect or disconnect a BT controller mid-game.
-  - Quit, relaunch: no pipeline re-compile stutter.
-  - Custom SAF root: startup doesn't ANR.
+  1. Revoke the games folder permission (Android settings → app → storage), open the game list: no crash, just no games.
+  2. A game folder or file name with emoji or non-Latin characters shows correctly and launches.
+  3. Connect or disconnect a Bluetooth controller and toggle dark mode mid-game: the game keeps running (no restart).
+  4. Play a new area, quit from the menu, relaunch: less shader or pipeline stutter in that area than before.
+  5. Launch a game, press Home, tap the game's home-screen shortcut: it returns to the running game (no crash). Tap a *different* game's shortcut: a "quit first" message.
+  6. Games list with many games, including some with odd or missing names: no crash when sorting.
 
-## Phase 4: input
-- [ ] Overlay `ACTION_CANCEL`, `resetInput` on rebuild and hide, DOWN ownership, Button multi-pointer (I2, I3)
-- [ ] Re-verify CanvasOnTouchListener (I1)
-- [ ] Drawer releases held keys; hotkey state cleared (K22); motion rotation (K23); `SensorEvent` copy (K20)
-- [ ] Binding UI event copies (K21); ControllerCallbacks lock (K19); motion state after recreation (K16)
-- [ ] Build, install, commit
+## Phase 4: input. Built in ea67dfae, awaiting device test
+- [?] Overlay `ACTION_CANCEL`, release on rebuild or hide, multi-pointer guard (I2)
+- [?] The overlay owns gestures and forwards non-button touches to the game screen (I3)
+- [x] CanvasOnTouchListener re-verified by review (I1, fixed on the dual branch)
+- [?] Drawer open and activity pause release held controller keys and axes; hotkey state reset (K22)
+- [?] Gyro follows 180° flips (K23); `SensorEvent` copy (K20); binding UI event copies (K21); rumble callbacks lock (K19); null input device
+- [ ] K16 motion toggle after activity recreation (rare now that config changes don't recreate)
 - **Device test:**
-  - Two-finger overlay presses.
-  - A system gesture while holding a button.
-  - Open the drawer while holding a controller button.
+  1. Touch the game screen with one finger, then press A with another: A registers.
+  2. Hold a button, swipe down the notification shade: the button releases.
+  3. Hold a controller button, open the in-game menu, close it: the button isn't stuck.
+  4. Phone gyro game: flip the device 180°; tilt direction stays correct.
+  5. Touch the GamePad screen area while the overlay is visible: touch still works.
 
 ## Phase 5: dual screen and multi-device
 - [ ] Research: `adb shell dumpsys display` on the Thor; Azahar and melonDS display selection; other dual-screen devices
