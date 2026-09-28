@@ -196,14 +196,21 @@ Alternatively, you can use the non-privateapi version of MoltenVK, but you may e
    - **On an Intel Mac:** `-DCMAKE_MAKE_PROGRAM=/usr/local/bin/ninja`
 
 ## Android
-Prerequisites:
-- git
-- [Android studio](https://developer.android.com/studio)
+### One-shot script (recommended)
+Prerequisites: git.
 
-Instructions:
-1. Run `git clone --recursive https://github.com/cemu-project/Cemu`
-2. Open the project located in `src/android` in Android Studio
-3. Click Build > Make Project
+1. Clone the repository with `--recursive`.
+2. Run the build script:
+   - Windows: `dist\android\build-apk.cmd` (or `dist\android\build-apk.ps1 [-BuildType dev|release|debug] [-Install]`). It downloads the JDK, Android SDK, NDK and CMake by itself.
+   - Linux/WSL: `dist/android/build-apk.sh [dev|release|debug] [--install]`. This needs `JAVA_HOME` and `ANDROID_HOME`.
+3. The APK is written to `dist/android/output/`.
+
+See [dist/android/README.md](dist/android/README.md) for details. The first build compiles all vcpkg dependencies and takes a while.
+
+### Android Studio
+1. Clone the repository with `--recursive`.
+2. Open the project located in `src/android` in Android Studio.
+3. Click Build > Make Project.
 
 ## FreeBSD
 

@@ -96,6 +96,15 @@ android {
                 signingConfigs.getByName("debug")
             }
         }
+        // Optimized build that installs next to the release app (info.cemu.cemu.dev, "Cemu Dev").
+        // Used for device testing, see dist/android/build-apk.ps1
+        create("dev") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+        }
     }
 
     externalNativeBuild {
@@ -188,7 +197,7 @@ abstract class ComputeCemuDataFilesHashTask : DefaultTask() {
 
 val computeCemuDataFilesHashTask =
     tasks.register<ComputeCemuDataFilesHashTask>("computeCemuDataFilesHash") {
-        cemuDataFolder.set(File(cemuDataFilesFolder))
+        cemuDataFolder.set(file(cemuDataFilesFolder))
     }
 tasks.preBuild.dependsOn(computeCemuDataFilesHashTask)
 

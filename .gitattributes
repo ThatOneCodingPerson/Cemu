@@ -1,1 +1,6 @@
 text=auto eol=lf
+# Shell scripts must keep LF even with core.autocrlf=true, or bash/WSL can't run them
+*.sh text eol=lf
+src/android/gradlew text eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf

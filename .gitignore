@@ -55,3 +55,6 @@ bin/graphicPacks/*
 
 # Ignore Finder view option files created by OS X
 .DS_Store
+# Android build script outputs (dist/android/build-apk.ps1)
+dist/android/output/
+dist/android/.build-drive

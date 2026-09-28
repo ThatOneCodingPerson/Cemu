@@ -656,8 +656,13 @@ if (ENABLE_WAYLAND)
 endif()
 
 if (ENABLE_VCPKG)
-  if(WIN32)
-    set(PKG_CONFIG_EXECUTABLE "${VCPKG_INSTALLED_DIR}/x64-windows/tools/pkgconf/pkgconf.exe")
+  if(CMAKE_HOST_WIN32)
+    # use vcpkg's host pkgconf; also needed when cross-compiling for Android from a Windows host,
+    # where the host triplet may be x64-windows or x64-mingw-static
+    file(GLOB VCPKG_HOST_PKGCONF "${VCPKG_INSTALLED_DIR}/x64-windows/tools/pkgconf/pkgconf.exe" "${VCPKG_INSTALLED_DIR}/*/tools/pkgconf/pkgconf.exe")
+    if(VCPKG_HOST_PKGCONF)
+      list(GET VCPKG_HOST_PKGCONF 0 PKG_CONFIG_EXECUTABLE)
+    endif()
   endif()
   find_package(PkgConfig REQUIRED)
   pkg_check_modules(libusb REQUIRED IMPORTED_TARGET libusb-1.0)
