@@ -75,7 +75,8 @@ class ControllerMotionHandler(private val context: Context) {
 
 
         override fun onSensorChanged(event: SensorEvent) {
-            val values = event.values
+            // the framework reuses the values array for the next event, keep a copy
+            val values = event.values.copyOf()
 
             if (event.sensor.type == Sensor.TYPE_GYROSCOPE) {
                 gyroValues = values

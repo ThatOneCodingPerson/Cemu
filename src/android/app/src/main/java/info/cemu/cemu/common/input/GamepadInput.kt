@@ -15,7 +15,7 @@ object GamepadInputSource {
     private val _keyEvents = MutableSharedFlow<InputEvent.Key>(extraBufferCapacity = 64)
     val keyEvents = _keyEvents.asSharedFlow()
     val hasKeySubscribers: Boolean
-        get() = _motionEvents.subscriptionCount.value > 0
+        get() = _keyEvents.subscriptionCount.value > 0
 
     val events = merge(_motionEvents, _keyEvents)
 
@@ -24,11 +24,13 @@ object GamepadInputSource {
         data class Key(val keyEvent: KeyEvent) : InputEvent()
     }
 
+    // Collectors run later than dispatch, when the framework has already recycled the event objects,
+    // so emit copies
     fun emitMotion(event: MotionEvent) {
-        _motionEvents.tryEmit(InputEvent.Motion(event))
+        _motionEvents.tryEmit(InputEvent.Motion(MotionEvent.obtain(event)))
     }
 
     fun emitKey(event: KeyEvent) {
-        _keyEvents.tryEmit(InputEvent.Key(event))
+        _keyEvents.tryEmit(InputEvent.Key(KeyEvent(event)))
     }
 }

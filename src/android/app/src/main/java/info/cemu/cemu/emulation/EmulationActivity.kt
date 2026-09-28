@@ -2,6 +2,7 @@ package info.cemu.cemu.emulation
 
 import android.content.Context
 import android.content.Intent
+import android.hardware.display.DisplayManager
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -63,6 +64,10 @@ private class InputDelegateManager(context: Context) {
         registerAll()
         deviceMotionHandler.setDeviceRotation(rotation)
         deviceMotionHandler.resumeListening()
+    }
+
+    fun onRotationChanged(rotation: Int) {
+        deviceMotionHandler.setDeviceRotation(rotation)
     }
 
     fun onPause() {
@@ -135,7 +140,13 @@ class EmulationActivity : AppCompatActivity() {
                         gamePath = gamePath,
                         setMotionSensorEnabled = inputManager::setDeviceMotionEnabled,
                         onQuit = ::onQuit,
-                        setInputListeningEnabled = { processInputEvents = it },
+                        setInputListeningEnabled = { enabled ->
+                            processInputEvents = enabled
+                            if (!enabled) {
+                                // key-ups aren't forwarded anymore, don't leave buttons held
+                                InputHandler.releaseAll()
+                            }
+                        },
                     )
                 }
             }
@@ -163,12 +174,31 @@ class EmulationActivity : AppCompatActivity() {
         super.onPause()
 
         inputManager.onPause()
+        getSystemService(DisplayManager::class.java).unregisterDisplayListener(rotationListener)
+        // key-up events of buttons held now may go elsewhere
+        InputHandler.releaseAll()
+        HotkeyManager.reset()
     }
 
     override fun onResume() {
         super.onResume()
 
         inputManager.onResume(display.rotation)
+        getSystemService(DisplayManager::class.java).registerDisplayListener(rotationListener, null)
+    }
+
+    // flipping between landscape and reverse landscape doesn't cause a configuration change, but the motion
+    // sensor axes have to follow the rotation
+    private val rotationListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayChanged(displayId: Int) {
+            val display = display ?: return
+            if (displayId == display.displayId) {
+                inputManager.onRotationChanged(display.rotation)
+            }
+        }
+
+        override fun onDisplayAdded(displayId: Int) {}
+        override fun onDisplayRemoved(displayId: Int) {}
     }
 
     override fun onDestroy() {

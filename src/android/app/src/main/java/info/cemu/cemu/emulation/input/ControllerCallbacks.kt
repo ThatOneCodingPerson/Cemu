@@ -13,12 +13,13 @@ class ControllerCallbacks(private val context: Context) : NativeInput.Controller
     private val inputManager
         get() = context.getSystemService(Context.INPUT_SERVICE) as InputManager?
 
+    // replaced (never mutated) on the main thread, read by the native rumble callbacks on another thread.
+    // (synchronized(inputs) didn't work: it locked on the object the field is being replaced with)
+    @Volatile
     private var inputs = mapOf<String, InputDevice>()
 
     private fun refreshControllers() {
-        synchronized(inputs) {
-            inputs = listGameControllers().associateBy { it.descriptor }
-        }
+        inputs = listGameControllers().associateBy { it.descriptor }
     }
 
     private val inputDeviceListener = object : InputDeviceListener {
@@ -40,20 +41,16 @@ class ControllerCallbacks(private val context: Context) : NativeInput.Controller
     override fun vibrateController(
         descriptor: String, milliseconds: Long, amplitude: Int
     ) {
-        synchronized(inputs) {
-            inputs[descriptor]?.tryUseVibrator {
-                vibrate(
-                    VibrationEffect.createOneShot(
-                        milliseconds, amplitude.coerceIn(1, 255)
-                    )
+        inputs[descriptor]?.tryUseVibrator {
+            vibrate(
+                VibrationEffect.createOneShot(
+                    milliseconds, amplitude.coerceIn(1, 255)
                 )
-            }
+            )
         }
     }
 
     override fun cancelControllerVibration(descriptor: String) {
-        synchronized(inputs) {
-            inputs[descriptor]?.tryUseVibrator { cancel() }
-        }
+        inputs[descriptor]?.tryUseVibrator { cancel() }
     }
 }

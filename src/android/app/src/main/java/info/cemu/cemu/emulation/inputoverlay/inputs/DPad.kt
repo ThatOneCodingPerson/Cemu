@@ -166,6 +166,7 @@ class DPad(
     }
 
     override fun resetInput() {
+        currentPointerId = -1
         updateState(NONE)
     }
 

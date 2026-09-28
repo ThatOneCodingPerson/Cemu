@@ -8,6 +8,7 @@ import android.util.Log
 import android.view.Display
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import android.view.View
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
@@ -193,9 +194,13 @@ fun EmulationScreen(
             }
         },
     ) {
+        // game screens below the input overlay, it forwards touches that don't hit a button to them
+        val gameSurfaceViews = remember { mutableListOf<View>() }
+
         EmulationSurfaces(
             viewModel = viewModel,
             isEmulationInitialized = isEmulationInitialized,
+            gameSurfaceViews = gameSurfaceViews,
         )
 
         InputOverlaySurface(
@@ -203,6 +208,7 @@ fun EmulationScreen(
             inputOverlaySettings = inputOverlaySettings,
             inputMode = inputOverlayInputMode,
             onEditFinished = { viewModel.saveInputOverlayRectangles(it) },
+            touchPassthroughTargets = { gameSurfaceViews.toList() },
         )
 
         if (inputOverlayInputMode != DEFAULT) {
@@ -425,6 +431,7 @@ private fun TextButtonItem(
 private fun EmulationSurfaces(
     viewModel: EmulationViewModel,
     isEmulationInitialized: Boolean,
+    gameSurfaceViews: MutableList<View>,
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
@@ -505,6 +512,7 @@ private fun EmulationSurfaces(
             touchIsTv = isMainTargetingTV,
             touchSurfaceWidth = mainTargetDimensions.width,
             touchSurfaceHeight = mainTargetDimensions.height,
+            gameSurfaceViews = gameSurfaceViews,
             afterInit = { viewModel.initializeEmulation() },
         )
 
@@ -516,6 +524,7 @@ private fun EmulationSurfaces(
                 touchIsTv = isPadTargetingTV,
                 touchSurfaceWidth = padTargetDimensions.width,
                 touchSurfaceHeight = padTargetDimensions.height,
+                gameSurfaceViews = gameSurfaceViews,
             )
         }
     }
@@ -559,16 +568,19 @@ private fun EmulationSurface(
     touchIsTv: Boolean,
     touchSurfaceWidth: Int,
     touchSurfaceHeight: Int,
+    gameSurfaceViews: MutableList<View>,
     rotateLeft: Boolean = false,
     afterInit: () -> Unit = {}
 ) {
     AndroidView(
         modifier = modifier,
+        onRelease = { gameSurfaceViews.remove(it) },
         factory = { context ->
             SurfaceView(context).apply {
                 var firstChange = true
 
                 setOnTouchListener(touchListener)
+                gameSurfaceViews.add(this)
 
                 holder.addCallback(holderCallback)
 

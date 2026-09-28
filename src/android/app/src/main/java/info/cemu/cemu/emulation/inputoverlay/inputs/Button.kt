@@ -13,6 +13,9 @@ abstract class Button(
     override fun onTouch(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
+                if (currentPointerId != -1) {
+                    return false // already held by another finger
+                }
                 val pointerIndex = event.actionIndex
                 val x = event.getX(pointerIndex)
                 val y = event.getY(pointerIndex)
@@ -35,6 +38,7 @@ abstract class Button(
     }
 
     override fun resetInput() {
+        currentPointerId = -1
         updateState(false)
     }
 

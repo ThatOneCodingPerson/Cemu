@@ -93,6 +93,10 @@ class InputOverlaySurfaceView(context: Context) : SurfaceView(context), OnTouchL
             return
         }
 
+        if (!isVisible) {
+            // a held button would stay pressed on the native side otherwise
+            releaseAllInputs()
+        }
         visibility = if (isVisible) VISIBLE else GONE
 
         invalidate()
@@ -374,7 +378,15 @@ class InputOverlaySurfaceView(context: Context) : SurfaceView(context), OnTouchL
         )
     }
 
+    private fun releaseAllInputs() {
+        for ((_, input) in inputs) {
+            input.release()
+        }
+        cancelTouchPassthrough()
+    }
+
     private fun setInputs() {
+        releaseAllInputs()
         if (isControllerDisabled(controllerIndex)) {
             inputs = mutableListOf()
             return
@@ -537,7 +549,86 @@ class InputOverlaySurfaceView(context: Context) : SurfaceView(context), OnTouchL
         return false
     }
 
+    /** Views under the overlay (the game screens) receiving touches that don't hit an overlay input. */
+    var touchPassthroughTargets: () -> List<View> = { emptyList() }
+    private var passthroughPointerId = -1
+    private var passthroughTarget: View? = null
+
+    private fun findPassthroughTarget(rawX: Float, rawY: Float): View? {
+        val location = IntArray(2)
+        return touchPassthroughTargets().firstOrNull { target ->
+            if (!target.isShown) return@firstOrNull false
+            target.getLocationOnScreen(location)
+            rawX >= location[0] && rawX < location[0] + target.width &&
+                    rawY >= location[1] && rawY < location[1] + target.height
+        }
+    }
+
+    private fun dispatchToPassthroughTarget(target: View, action: Int, rawX: Float, rawY: Float, source: MotionEvent) {
+        val location = IntArray(2)
+        target.getLocationOnScreen(location)
+        val event = MotionEvent.obtain(
+            source.downTime,
+            source.eventTime,
+            action,
+            rawX - location[0],
+            rawY - location[1],
+            0,
+        )
+        target.dispatchTouchEvent(event)
+        event.recycle()
+    }
+
+    private fun cancelTouchPassthrough() {
+        val target = passthroughTarget ?: return
+        val now = android.os.SystemClock.uptimeMillis()
+        val event = MotionEvent.obtain(now, now, MotionEvent.ACTION_CANCEL, 0f, 0f, 0)
+        target.dispatchTouchEvent(event)
+        event.recycle()
+        passthroughTarget = null
+        passthroughPointerId = -1
+    }
+
+    // The overlay owns every gesture while visible, so a second finger on a button still works when the first one
+    // is on the game screen. Pointers not on an input are forwarded (one at a time) to the game screen below.
+    private fun forwardUnhandledTouch(event: MotionEvent, handledByInput: Boolean) {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
+                if (handledByInput || passthroughTarget != null) return
+                val index = event.actionIndex
+                val rawX = event.getRawX(index)
+                val rawY = event.getRawY(index)
+                val target = findPassthroughTarget(rawX, rawY) ?: return
+                passthroughTarget = target
+                passthroughPointerId = event.getPointerId(index)
+                dispatchToPassthroughTarget(target, MotionEvent.ACTION_DOWN, rawX, rawY, event)
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                val target = passthroughTarget ?: return
+                val index = event.findPointerIndex(passthroughPointerId)
+                if (index < 0) return
+                dispatchToPassthroughTarget(target, MotionEvent.ACTION_MOVE, event.getRawX(index), event.getRawY(index), event)
+            }
+
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+                val target = passthroughTarget ?: return
+                val index = event.actionIndex
+                if (event.getPointerId(index) != passthroughPointerId) return
+                dispatchToPassthroughTarget(target, MotionEvent.ACTION_UP, event.getRawX(index), event.getRawY(index), event)
+                passthroughTarget = null
+                passthroughPointerId = -1
+            }
+        }
+    }
+
     override fun onTouch(v: View, event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_CANCEL) {
+            // e.g. a system gesture took over: nothing may stay pressed
+            releaseAllInputs()
+            invalidate()
+            return true
+        }
         var touchEventProcessed = false
         when (inputMode) {
             InputMode.DEFAULT -> {
@@ -546,6 +637,11 @@ class InputOverlaySurfaceView(context: Context) : SurfaceView(context), OnTouchL
                         touchEventProcessed = true
                     }
                 }
+                forwardUnhandledTouch(event, touchEventProcessed)
+                if (touchEventProcessed) {
+                    invalidate()
+                }
+                return true
             }
 
             InputMode.EDIT_POSITION -> touchEventProcessed = onEditPosition(event)
@@ -570,6 +666,7 @@ fun InputOverlaySurface(
     inputOverlaySettings: InputOverlaySettings,
     inputMode: InputOverlaySurfaceView.InputMode,
     onEditFinished: (Map<OverlayInputConfig, InputOverlayRect>) -> Unit,
+    touchPassthroughTargets: () -> List<View> = { emptyList() },
 ) {
     AndroidView(
         modifier = Modifier.fillMaxSize(),
@@ -579,6 +676,7 @@ fun InputOverlaySurface(
                 setInputMode(inputMode)
                 applySettings(inputOverlaySettings)
                 onEditFinishedListener = onEditFinished
+                this.touchPassthroughTargets = touchPassthroughTargets
             }
         },
         update = { view ->

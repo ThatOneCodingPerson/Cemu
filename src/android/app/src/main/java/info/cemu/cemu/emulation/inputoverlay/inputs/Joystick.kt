@@ -100,6 +100,9 @@ class Joystick(
     }
 
     override fun resetInput() {
+        centerX = originalCenterX
+        centerY = originalCenterY
+        currentPointerId = -1
         updateState(false, 0f, 0f)
     }
 

@@ -73,6 +73,9 @@ abstract class Input protected constructor(
 
     protected abstract fun resetInput()
 
+    /** Releases the input (e.g. on ACTION_CANCEL or when the overlay is rebuilt/hidden while held). */
+    fun release() = resetInput()
+
     fun reset() {
         drawBoundingRectangle = false
     }

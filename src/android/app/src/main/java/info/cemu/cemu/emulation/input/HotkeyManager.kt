@@ -32,6 +32,12 @@ object HotkeyManager {
         checkHotkeys()
     }
 
+    /** Forgets held keys, e.g. when key-up events may be missed (activity paused). */
+    fun reset() {
+        pressedKeys.clear()
+        activeActions.clear()
+    }
+
     private fun checkHotkeys() {
         for ((action, combo) in hotkeyMappings) {
             val comboKeys = combo.keys
