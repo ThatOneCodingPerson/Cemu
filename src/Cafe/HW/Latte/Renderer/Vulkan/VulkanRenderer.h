@@ -268,6 +268,12 @@ public:
 	std::vector<VKRDestructibleObject*> m_destructionQueue;
 
 	void PipelineCacheSaveThread(size_t cache_size);
+	bool SavePipelineCacheIfChanged(const fs::path& filename); // expects m_pipeline_cache_save_mutex to be locked, unlocks it
+	// saves the driver pipeline cache now if it changed (e.g. before the process is terminated). Returns false
+	// if the cache was busy for longer than maxWait
+	bool FlushPipelineCache(std::chrono::milliseconds maxWait);
+	// wakes the save thread to save without the usual delay (e.g. when the app goes to the background)
+	void RequestPipelineCacheSave();
 
 	void ClearColorbuffer(bool padView) override;
 	void ClearColorImageRaw(VkImage image, uint32 sliceIndex, uint32 mipIndex, const VkClearColorValue& color, VkImageLayout inputLayout, VkImageLayout outputLayout);
@@ -624,6 +630,8 @@ private:
 	QueueFamilyIndices m_indices{};
 
 	Semaphore m_pipeline_cache_semaphore;
+	std::atomic_bool m_pipelineCacheSaveRequested = false;
+	std::atomic<size_t> m_pipelineCacheSavedSize = 0;
 	std::shared_mutex m_pipeline_cache_save_mutex;
 	std::thread m_pipeline_cache_save_thread;
 	VkPipelineCache m_pipeline_cache{ nullptr };

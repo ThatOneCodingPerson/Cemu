@@ -79,7 +79,10 @@ object NativeGraphicPacks {
         var activePreset: String
             get() = _activePreset
             set(value) {
-                require(presets.any { it == value }) { "Trying to set an invalid preset: $value" }
+                // can happen when the preset list changed underneath the UI; ignore instead of crashing
+                if (presets.none { it == value }) {
+                    return
+                }
                 setGraphicPackActivePreset(graphicPackId, category, value)
                 _activePreset = value
             }

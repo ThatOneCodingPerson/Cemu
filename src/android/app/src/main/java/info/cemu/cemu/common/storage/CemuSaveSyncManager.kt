@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 object CemuSaveSyncManager {
     private const val SYNC_DEBOUNCE_MS = 1500L
@@ -123,7 +124,9 @@ object CemuSaveSyncManager {
         private val root: File,
         private val onChanged: (String) -> Unit,
     ) {
-        private val observers = mutableMapOf<String, FileObserver>()
+        // FileObserver events arrive on their own thread (watchDirectory on CREATE) while stopWatching runs on
+        // the caller's thread
+        private val observers = ConcurrentHashMap<String, FileObserver>()
 
         fun startWatching() {
             if (!root.exists()) {
@@ -154,8 +157,9 @@ object CemuSaveSyncManager {
                     onChanged(changed.relativeToOrSelf(root).path.replace(File.separatorChar, '/'))
                 }
             }
-            observers[canonicalPath] = observer
-            observer.startWatching()
+            if (observers.putIfAbsent(canonicalPath, observer) == null) {
+                observer.startWatching()
+            }
         }
     }
 }

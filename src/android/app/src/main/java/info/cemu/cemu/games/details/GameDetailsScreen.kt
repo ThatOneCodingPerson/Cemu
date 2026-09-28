@@ -119,10 +119,13 @@ private fun getLastPlayedDate(game: Game): String {
     if (game.lastPlayedYear.toInt() == 0) {
         return tr("Never played")
     }
-    val lastPlayedDate = LocalDate.of(
-        game.lastPlayedYear.toInt(),
-        game.lastPlayedMonth.toInt(),
-        game.lastPlayedDay.toInt()
-    )
+    // the date comes from the play time tracking file, don't crash on an invalid one
+    val lastPlayedDate = runCatching {
+        LocalDate.of(
+            game.lastPlayedYear.toInt(),
+            game.lastPlayedMonth.toInt(),
+            game.lastPlayedDay.toInt()
+        )
+    }.getOrNull() ?: return tr("Unknown")
     return DateFormatter.format(lastPlayedDate)
 }

@@ -232,6 +232,11 @@ class GraphicPacksViewModel(
         }
     }
 
+    override fun onCleared() {
+        super.onCleared()
+        graphicPacksDownloader.close()
+    }
+
     fun cancelDownload() {
         val oldDownloadJob = downloadJob ?: return
         downloadJob = null

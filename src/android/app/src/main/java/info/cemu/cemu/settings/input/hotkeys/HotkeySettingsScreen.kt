@@ -117,7 +117,8 @@ private fun HotkeyBindingDialog(
     onClear: () -> Unit,
     mapHotkeyCombo: (Set<Int>) -> Unit,
 ) {
-    val pressedKeys = rememberSaveable {
+    // not rememberSaveable: a snapshot set isn't saveable to a Bundle (crash when the activity saves its state)
+    val pressedKeys = remember {
         mutableStateSetOf<Int>()
     }
 
@@ -135,7 +136,8 @@ private fun HotkeyBindingDialog(
                 return@LaunchedEffect
             }
 
-            mapHotkeyCombo(pressedKeys)
+            // a copy: DataStore data must be immutable, and pressedKeys keeps changing
+            mapHotkeyCombo(pressedKeys.toSet())
         }
     }
 

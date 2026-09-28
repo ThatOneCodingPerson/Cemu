@@ -454,6 +454,9 @@ extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeEmulation_pauseTitle([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
 {
 	CafeSystem::PauseTitle();
+	// the app is going to the background where it may be killed at any time, save new pipelines now
+	if (g_renderer && CafeSystem::IsTitleRunning())
+		VulkanRenderer::GetInstance()->RequestPipelineCacheSave();
 }
 
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
@@ -468,6 +471,9 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_quitProcess([[maybe_unused]]
 	// exit() would run static destructors (g_renderer, the unjoined Latte thread) while the emulation threads are
 	// still running, which crashes. Flush what matters and terminate without them.
 	cemuLog_log(LogType::Force, "Quitting emulation");
+	// otherwise pipelines compiled since the last periodic save are lost (stutter on the next launch)
+	if (g_renderer && CafeSystem::IsTitleRunning() && !VulkanRenderer::GetInstance()->FlushPipelineCache(std::chrono::seconds(2)))
+		cemuLog_log(LogType::Force, "Pipeline cache is busy, not saved on quit");
 	cemuLog_waitForFlush();
 	fflush(nullptr);
 	_exit(0);

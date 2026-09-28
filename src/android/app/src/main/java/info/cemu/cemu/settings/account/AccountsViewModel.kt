@@ -63,7 +63,8 @@ class AccountsViewModel : ViewModel() {
             activeAccountNetworkService
         ) { accounts, activeAccountPersistentId, activeAccountNetworkService ->
             val account = accounts.firstOrNull { it.persistentId == activeAccountPersistentId }
-                ?: accounts.first()
+                ?: accounts.firstOrNull()
+                ?: NativeAccount.Account()
 
             ActiveAccountData(account, activeAccountNetworkService)
         }.stateIn(

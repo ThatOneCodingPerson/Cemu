@@ -1,6 +1,7 @@
 package info.cemu.cemu.common.io
 
 import java.io.FileOutputStream
+import java.io.IOException
 import java.io.InputStream
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -28,11 +29,19 @@ private fun extractZipEntry(
     buffer: ByteArray,
     targetDir: String,
 ) {
-    val file = Paths.get(targetDir, zipEntry.name).toFile()
+    // reject "zip slip" entries (e.g. "../../x") that would be written outside of targetDir
+    val targetPath = Paths.get(targetDir).toAbsolutePath().normalize()
+    val entryPath = targetPath.resolve(zipEntry.name).normalize()
+    if (!entryPath.startsWith(targetPath)) {
+        throw IOException("Invalid zip entry: ${zipEntry.name}")
+    }
+    val file = entryPath.toFile()
     if (zipEntry.isDirectory) {
         file.apply { if (!isDirectory) mkdirs() }
         return
     }
+    // zips don't necessarily contain entries for their directories
+    file.parentFile?.mkdirs()
     FileOutputStream(file).use { fileOutputStream ->
         var bytesRead: Int
         while ((zipInputStream.read(buffer).also { bytesRead = it }) > 0) {

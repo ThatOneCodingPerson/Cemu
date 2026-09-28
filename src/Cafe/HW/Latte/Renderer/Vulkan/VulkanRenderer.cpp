@@ -2417,6 +2417,75 @@ void VulkanRenderer::WaitCommandBufferFinished(uint64 commandBufferId)
 		WaitForNextFinishedCommandBuffer();
 }
 
+// written to a temporary file first: a process kill during the write must not leave a truncated cache behind
+static bool WritePipelineCacheFile(const fs::path& filename, const std::vector<uint8_t>& data)
+{
+	fs::path tmpFilename = filename;
+	tmpFilename += ".tmp";
+	{
+		std::ofstream file(tmpFilename, std::ios::out | std::ios::binary | std::ios::trunc);
+		if (!file.is_open())
+			return false;
+		file.write((const char*)data.data(), data.size());
+		if (!file.good())
+			return false;
+	}
+	std::error_code ec;
+	fs::rename(tmpFilename, filename, ec);
+	return !ec;
+}
+
+bool VulkanRenderer::SavePipelineCacheIfChanged(const fs::path& filename)
+{
+	size_t size = 0;
+	VkResult res = vkGetPipelineCacheData(m_logicalDevice, m_pipeline_cache, &size, nullptr);
+	if (res != VK_SUCCESS || size == 0 || size == m_pipelineCacheSavedSize)
+	{
+		m_pipeline_cache_save_mutex.unlock();
+		return true;
+	}
+	std::vector<uint8_t> cacheData(size);
+	res = vkGetPipelineCacheData(m_logicalDevice, m_pipeline_cache, &size, cacheData.data());
+	m_pipeline_cache_save_mutex.unlock();
+	if (res != VK_SUCCESS && res != VK_INCOMPLETE)
+	{
+		cemuLog_log(LogType::Force, "can't retrieve pipeline cache data: 0x{:x}", res);
+		return false;
+	}
+	cacheData.resize(size);
+	// the save thread and FlushPipelineCache may both get here
+	static std::mutex s_writeMutex;
+	std::scoped_lock writeLock(s_writeMutex);
+	if (!WritePipelineCacheFile(filename, cacheData))
+	{
+		cemuLog_log(LogType::Force, "can't write pipeline cache to disk");
+		return false;
+	}
+	m_pipelineCacheSavedSize = size;
+	cemuLog_logDebug(LogType::Force, "pipeline cache saved");
+	return true;
+}
+
+bool VulkanRenderer::FlushPipelineCache(std::chrono::milliseconds maxWait)
+{
+	const auto filename = ActiveSettings::GetCachePath("shaderCache/driver/vk") / fmt::format(L"{:016x}.bin", CafeSystem::GetForegroundTitleId());
+	// compiler threads hold the lock in shared mode while creating pipelines
+	const auto deadline = std::chrono::steady_clock::now() + maxWait;
+	while (!m_pipeline_cache_save_mutex.try_lock())
+	{
+		if (std::chrono::steady_clock::now() >= deadline)
+			return false;
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+	return SavePipelineCacheIfChanged(filename);
+}
+
+void VulkanRenderer::RequestPipelineCacheSave()
+{
+	m_pipelineCacheSaveRequested = true;
+	m_pipeline_cache_semaphore.notify();
+}
+
 void VulkanRenderer::PipelineCacheSaveThread(size_t cache_size)
 {
 	SetThreadName("vkDriverPlCache");
@@ -2435,6 +2504,7 @@ void VulkanRenderer::PipelineCacheSaveThread(size_t cache_size)
 	}
 
 	const auto filename = dir / fmt::format(L"{:016x}.bin", CafeSystem::GetForegroundTitleId());
+	m_pipelineCacheSavedSize = cache_size;
 
 	while (true)
 	{
@@ -2447,6 +2517,8 @@ void VulkanRenderer::PipelineCacheSaveThread(size_t cache_size)
 		{
 			if (m_destructionRequested)
 				return;
+			if (m_pipelineCacheSaveRequested.exchange(false))
+				break;
 			std::this_thread::sleep_for(std::chrono::milliseconds(250));
 		}
 
@@ -2455,42 +2527,8 @@ void VulkanRenderer::PipelineCacheSaveThread(size_t cache_size)
 		while (!m_pipeline_cache_save_mutex.try_lock())
 			std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
-		size_t size = 0;
-		VkResult res = vkGetPipelineCacheData(m_logicalDevice, m_pipeline_cache, &size, nullptr);
-		if (res == VK_SUCCESS && size > 0 && size != cache_size)
-		{
-			std::vector<uint8_t> cacheData(size);
-			res = vkGetPipelineCacheData(m_logicalDevice, m_pipeline_cache, &size, cacheData.data());
-			m_pipeline_cache_semaphore.reset();
-			m_pipeline_cache_save_mutex.unlock();
-
-			if (res == VK_SUCCESS)
-			{
-
-				auto file = std::ofstream(filename, std::ios::out | std::ios::binary);
-				if (file.is_open())
-				{
-					file.write((char*)cacheData.data(), cacheData.size());
-					file.close();
-
-					cache_size = size;
-					cemuLog_logDebug(LogType::Force, "pipeline cache saved");
-				}
-				else
-				{
-					cemuLog_log(LogType::Force, "can't write pipeline cache to disk");
-				}
-			}
-			else
-			{
-				cemuLog_log(LogType::Force, "can't retrieve pipeline cache data: 0x{:x}", res);
-			}
-		}
-		else
-		{
-			m_pipeline_cache_semaphore.reset();
-			m_pipeline_cache_save_mutex.unlock();
-		}
+		m_pipeline_cache_semaphore.reset();
+		SavePipelineCacheIfChanged(filename);
 	}
 }
 

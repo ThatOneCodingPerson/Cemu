@@ -37,7 +37,10 @@ void GameTitleLoader::ReloadGameTitles()
 	{
 		CafeTitleList::UnregisterCallback(m_callbackIdTitleList.value());
 	}
-	m_gameInfos.clear();
+	{
+		std::scoped_lock lock(m_gameInfosMutex);
+		m_gameInfos.clear();
+	}
 	CafeTitleList::ClearScanPaths();
 	for (auto&& gamePath : GetConfig().game_paths)
 		CafeTitleList::AddScanPath(gamePath);
@@ -64,13 +67,15 @@ void GameTitleLoader::TitleRefresh(TitleId titleId)
 	}
 	TitleId baseTitleId = gameInfo.GetBaseTitleId();
 	bool isNewEntry = false;
-	if (auto gameInfoIt = m_gameInfos.find(baseTitleId); gameInfoIt == m_gameInfos.end())
+	Game game{};
 	{
-		isNewEntry = true;
-		m_gameInfos[baseTitleId] = Game();
+		std::scoped_lock lock(m_gameInfosMutex);
+		if (auto gameInfoIt = m_gameInfos.find(baseTitleId); gameInfoIt == m_gameInfos.end())
+			isNewEntry = true;
+		else
+			game = gameInfoIt->second;
 	}
 
-	Game& game = m_gameInfos[baseTitleId];
 	std::optional<TitleInfo> titleInfo = getFirstTitleInfoByTitleId(titleId);
 	game.titleId = baseTitleId;
 	if (titleInfo.has_value())
@@ -84,6 +89,8 @@ void GameTitleLoader::TitleRefresh(TitleId titleId)
 	if (!isNewEntry)
 	{
 		// TOOD: update?
+		std::scoped_lock lock(m_gameInfosMutex);
+		m_gameInfos[baseTitleId] = game;
 		return;
 	}
 	iosu::pdm::GameListStat playTimeStat{};
@@ -95,8 +102,18 @@ void GameTitleLoader::TitleRefresh(TitleId titleId)
 			game.lastPlayed = year_month_day(year(playTimeStat.last_played.year), month(playTimeStat.last_played.month + 1), day(playTimeStat.last_played.day));
 		}
 	}
-	if (m_gameTitleLoadedCallback)
-		m_gameTitleLoadedCallback->OnTitleLoaded(game, icon);
+	{
+		std::scoped_lock lock(m_gameInfosMutex);
+		m_gameInfos[baseTitleId] = game;
+	}
+	// copy under the lock SetOnTitleLoaded uses; the copy also keeps the callback alive while it runs
+	std::shared_ptr<GameTitleLoadedCallback> callback;
+	{
+		std::scoped_lock lock(m_threadMutex);
+		callback = m_gameTitleLoadedCallback;
+	}
+	if (callback)
+		callback->OnTitleLoaded(game, icon);
 }
 
 void GameTitleLoader::LoadGameTitles()

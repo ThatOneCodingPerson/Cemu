@@ -32,6 +32,7 @@ class GameTitleLoader
 	std::atomic_bool m_continueLoading = true;
 	std::deque<TitleId> m_titlesToLoad;
 	std::optional<uint64> m_callbackIdTitleList;
+	std::mutex m_gameInfosMutex; // m_gameInfos is cleared by ReloadGameTitles (JNI thread) while the loader thread fills it
 	std::map<TitleId, Game> m_gameInfos;
 	std::map<TitleId, std::shared_ptr<Image>> m_iconCache;
 	std::map<TitleId, std::string> m_name_cache;

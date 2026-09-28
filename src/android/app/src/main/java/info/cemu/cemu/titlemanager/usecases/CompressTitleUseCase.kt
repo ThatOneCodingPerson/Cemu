@@ -59,7 +59,12 @@ class CompressTitleUseCase(private val scope: CoroutineScope) {
     ) {
         if (_stage.value != null) return
 
-        val fd = context.contentResolver.openFileDescriptor(uri, "rw")
+        // throws e.g. for providers that don't support "rw" (cloud storage) or revoked permissions
+        val fd = try {
+            context.contentResolver.openFileDescriptor(uri, "rw")
+        } catch (exception: Exception) {
+            null
+        }
 
         if (fd == null) {
             callback(CompressResult.ERROR)

@@ -3,6 +3,7 @@ package info.cemu.cemu
 import android.app.Application
 import android.app.Activity
 import android.os.Bundle
+import android.util.Log
 import info.cemu.cemu.common.settings.AppSettingsStore
 import info.cemu.cemu.common.storage.CemuSaveSyncManager
 import info.cemu.cemu.common.storage.CemuDataStorage
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.io.IOException
+import java.io.RandomAccessFile
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.util.regex.Pattern
@@ -68,6 +70,17 @@ class CemuApplication : Application() {
             return
         }
 
+        // the main and the emulation process both run this at startup, don't let them delete/copy concurrently
+        try {
+            RandomAccessFile(dataFolder.resolveSibling("data.lock"), "rw").channel.use { channel ->
+                channel.lock().use { copyDataFilesIfChanged(dataFolder) }
+            }
+        } catch (exception: IOException) {
+            Log.e("Cemu", "Failed to copy data files", exception)
+        }
+    }
+
+    private fun copyDataFilesIfChanged(dataFolder: File) {
         val hashFileName = "hash.txt"
         val hashFile = dataFolder.resolve(hashFileName)
         val oldHash = if (hashFile.isFile) hashFile.readText() else "invalid"
@@ -84,7 +97,6 @@ class CemuApplication : Application() {
 
         dataFolder.deleteRecursively()
         dataFolder.mkdirs()
-        dataFolder.resolve(hashFileName).writeText(newHash)
 
         fun traverseAssets(path: String = ""): Iterator<String> = iterator {
             val assetFiles = assets.list(path) ?: return@iterator
@@ -120,6 +132,9 @@ class CemuApplication : Application() {
             assets.open(assetFile)
                 .use { asset -> outFile.outputStream().use { out -> asset.copyTo(out) } }
         }
+
+        // written last: if the process is killed while copying, the copy is redone on the next start
+        dataFolder.resolve(hashFileName).writeText(newHash)
     }
 
     private fun configureExceptionHandler() {

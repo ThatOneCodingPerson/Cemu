@@ -6,6 +6,7 @@ namespace NativeSwkbd
 {
 	std::atomic<bool> s_isOpen;
 
+	std::mutex s_currentInputTextMutex; // written by the PPC thread (show) and the UI thread (text changes)
 	std::string s_currentInputText;
 
 	struct StrDiffs
@@ -42,7 +43,10 @@ namespace NativeSwkbd
 		{
 			s_isOpen = true;
 
-			s_currentInputText = initialText;
+			{
+				std::scoped_lock lock(s_currentInputTextMutex);
+				s_currentInputText = initialText;
+			}
 
 			JNIUtils::FiberSafeJNICall([&](JNIEnv* env) {
 				jstring j_initialText = JNIUtils::ToJString(env, initialText);
@@ -83,6 +87,7 @@ Java_info_cemu_cemu_nativeinterface_NativeSwkbd_onTextChanged([[maybe_unused]] J
 		return;
 
 	std::string text = JNIUtils::FromJString(env, j_text);
+	std::scoped_lock lock(NativeSwkbd::s_currentInputTextMutex);
 	auto stringDiff = NativeSwkbd::GetStringDiffs(text, NativeSwkbd::s_currentInputText);
 	for (size_t i = 0; i < stringDiff.numberOfCharacterToDelete; i++)
 		swkbd::keyInput(swkbd::BACKSPACE_KEYCODE);

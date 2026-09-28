@@ -62,7 +62,14 @@ class DocumentsProvider : DocumentsProvider() {
         if (parentDocumentId == null || documentId == null) {
             return false
         }
-        return documentId.startsWith(parentDocumentId)
+        // compare real paths: a plain prefix check accepts "root/a" as parent of "root/ab" or "root/a/../.."
+        return try {
+            val parentPath = getFile(parentDocumentId).canonicalFile.toPath()
+            val childPath = getFile(documentId).canonicalFile.toPath()
+            childPath != parentPath && childPath.startsWith(parentPath)
+        } catch (_: IOException) {
+            false
+        }
     }
 
     @Throws(FileNotFoundException::class)
@@ -263,7 +270,8 @@ class DocumentsProvider : DocumentsProvider() {
         while (file.exists()) {
             val newFileName = "$baseName ($noConflictId)$extension"
             noConflictId++
-            file = file.toPath().resolve(newFileName).toFile()
+            // next to the conflicting file, not inside it
+            file = resolve(originalFile, newFileName)
         }
         return file
     }
@@ -322,7 +330,12 @@ class DocumentsProvider : DocumentsProvider() {
     private fun getFile(documentId: String?): File {
         Objects.requireNonNull(documentId)
         if (documentId!!.startsWith(ROOT_ID)) {
-            val file = resolve(baseDirectory, documentId.substring(ROOT_ID.length + 1))
+            val file = resolve(baseDirectory, documentId.substring(ROOT_ID.length).trimStart('/'))
+            // document ids come from other apps: don't let "root/../.." escape the Cemu folder
+            val basePath = baseDirectory.canonicalFile.toPath()
+            if (!file.canonicalFile.toPath().startsWith(basePath)) {
+                throw FileNotFoundException("$documentId is outside of the root")
+            }
             if (!file.exists()) {
                 throw FileNotFoundException("${file.absolutePath} $documentId not found")
             }

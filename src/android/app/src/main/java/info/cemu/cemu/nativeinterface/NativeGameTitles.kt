@@ -113,16 +113,16 @@ object NativeGameTitles {
             if (titleId == other.titleId) {
                 return 0
             }
-            if (isFavorite && !other.isFavorite) {
-                return -1
+            if (isFavorite != other.isFavorite) {
+                return if (isFavorite) -1 else 1
             }
-            if (!isFavorite && other.isFavorite) {
-                return 1
+            // must be a consistent total order, sorting throws "Comparison method violates its
+            // general contract" otherwise (null names used to compare as equal to everything)
+            val nameComparison = compareValues(name, other.name)
+            if (nameComparison != 0) {
+                return nameComparison
             }
-            if (name == other.name) {
-                return titleId.compareTo(other.titleId)
-            }
-            return name?.compareTo(other.name ?: "") ?: 0
+            return titleId.compareTo(other.titleId)
         }
 
         private var iconBitmap: ImageBitmap? = null

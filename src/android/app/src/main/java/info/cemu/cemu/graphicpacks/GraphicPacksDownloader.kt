@@ -42,9 +42,13 @@ data class Asset(
     val browserDownloadUrl: String
 )
 
-class GraphicPacksDownloader(private val client: HttpClient = HttpClient()) {
+class GraphicPacksDownloader(private val client: HttpClient = HttpClient()) : AutoCloseable {
     private val json = Json {
         ignoreUnknownKeys = true
+    }
+
+    override fun close() {
+        client.close()
     }
 
     private fun getCurrentVersion(graphicPacksDir: File): String? {

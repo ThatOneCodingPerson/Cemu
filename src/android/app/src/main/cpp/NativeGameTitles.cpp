@@ -276,6 +276,8 @@ class TitleListCallbacks
 			return; // don't show system data titles for now
 
 		ParsedMetaXml* metaInfo = titleInfo.GetMetaInfo();
+		if (!metaInfo)
+			return; // e.g. a damaged title without a readable meta.xml
 		std::string name = metaInfo->GetLongName(GetConfig().console_language.GetValue());
 		const auto nl = name.find(L'\n');
 		if (nl != std::string::npos)
