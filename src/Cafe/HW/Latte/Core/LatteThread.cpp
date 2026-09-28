@@ -215,6 +215,25 @@ int Latte_ThreadEntry()
 std::thread sLatteThread;
 std::mutex sLatteThreadStateMutex;
 
+#if BOOST_PLAT_ANDROID
+// An exception escaping the GPU thread would std::terminate without telling the user anything (and Latte_Start
+// would wait forever if it happens during init). Report it, then end the process.
+int Latte_ThreadEntryGuarded()
+{
+	try
+	{
+		return Latte_ThreadEntry();
+	}
+	catch (const std::exception& ex)
+	{
+		cemuLog_log(LogType::Force, "Unhandled exception on the GPU thread: {}", ex.what());
+		WindowSystem::ShowErrorDialog(fmt::format("The graphics thread stopped because of an error:\n{}", ex.what()), "Emulation error");
+		cemuLog_waitForFlush();
+		_exit(1);
+	}
+}
+#endif
+
 // initializes GPU thread which in turn also activates graphic packs
 // does not return until the thread finished initialization
 void Latte_Start()
@@ -223,7 +242,11 @@ void Latte_Start()
 	cemu_assert_debug(!sLatteThreadRunning);
 	sLatteThreadRunning = true;
 	sLatteThreadFinishedInit = false;
+#if BOOST_PLAT_ANDROID
+	sLatteThread = std::thread(Latte_ThreadEntryGuarded);
+#else
 	sLatteThread = std::thread(Latte_ThreadEntry);
+#endif
 	// wait until initialized
 	while (!sLatteThreadFinishedInit)
 	{

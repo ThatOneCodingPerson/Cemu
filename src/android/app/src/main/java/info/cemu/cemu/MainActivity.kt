@@ -23,12 +23,14 @@ import info.cemu.cemu.about.aboutCemuNavigation
 import info.cemu.cemu.common.input.GamepadInputSource
 import info.cemu.cemu.common.ui.components.ActivityContent
 import info.cemu.cemu.common.ui.localization.TranslatableContent
+import info.cemu.cemu.common.ui.localization.tr
 import info.cemu.cemu.emulation.EmulationActivity
 import info.cemu.cemu.games.GameListRoute
 import info.cemu.cemu.games.gamesNavigation
 import info.cemu.cemu.graphicpacks.GraphicPacksRoute
 import info.cemu.cemu.graphicpacks.graphicPacksNavigation
 import info.cemu.cemu.nativeinterface.NativeGameTitles.Game
+import info.cemu.cemu.nativeinterface.NativeErrors
 import info.cemu.cemu.nativeinterface.NativeSettings
 import info.cemu.cemu.settings.SettingsRoute
 import info.cemu.cemu.settings.settingsNavigation
@@ -75,6 +77,14 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         NativeSettings.saveSettings()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // the emulator may have terminated because of an error while no dialog could be shown
+        NativeErrors.takeLastSessionError()?.let { error ->
+            NativeErrors.show(tr("Cemu stopped because of an error"), error)
+        }
     }
 }
 

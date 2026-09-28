@@ -11,6 +11,10 @@
 
 #include <fmt/printf.h>
 
+#if BOOST_PLAT_ANDROID
+#include <android/log.h>
+#endif
+
 uint64 s_loggingFlagMask = cemuLog_getFlag(LogType::Force);
 
 class LoggingDispatcher
@@ -206,6 +210,11 @@ bool cemuLog_log(LogType type, std::string_view text)
 	if (LaunchSettings::Verbose())
 		std::cout << text << std::endl;
 
+#if BOOST_PLAT_ANDROID
+	// mirror to logcat so logs are visible via adb without pulling log.txt
+	__android_log_print(type == LogType::Force ? ANDROID_LOG_INFO : ANDROID_LOG_DEBUG, "Cemu", "%.*s", (int)text.size(), text.data());
+#endif
+
 	cemuLog_writeLineToLog(text);
 
 	const auto it = std::find_if(g_logging_window_mapping.cbegin(), g_logging_window_mapping.cend(),
@@ -246,6 +255,8 @@ void cemuLog_waitForFlush()
 {
 	cemuLog_createLogFile(false);
 	std::unique_lock lock(LogContext.log_mutex);
+	if (!LogContext.file_stream.is_open())
+		return; // log file could not be created, no writer thread will ever drain the cache
 	while(!LogContext.text_cache.empty())
 	{
 		lock.unlock();

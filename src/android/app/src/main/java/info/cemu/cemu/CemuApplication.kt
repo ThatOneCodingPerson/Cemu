@@ -14,6 +14,7 @@ import info.cemu.cemu.nativeinterface.NativeActiveSettings.setInternalDir
 import info.cemu.cemu.nativeinterface.NativeActiveSettings.setNativeLibDir
 import info.cemu.cemu.nativeinterface.NativeEmulation.initializeEmulation
 import info.cemu.cemu.nativeinterface.NativeEmulation.setDPI
+import info.cemu.cemu.nativeinterface.NativeErrors
 import info.cemu.cemu.nativeinterface.NativeFiles
 import info.cemu.cemu.nativeinterface.NativeGraphicPacks.refreshGraphicPacks
 import info.cemu.cemu.nativeinterface.NativeLogging.crashLog
@@ -152,6 +153,7 @@ class CemuApplication : Application() {
         )
         setNativeLibDir(applicationInfo.nativeLibraryDir)
         setInternalDir(dataDir.absolutePath)
+        NativeErrors.initialize()
         initializeEmulation()
         initializeSwkbd()
         refreshGraphicPacks()

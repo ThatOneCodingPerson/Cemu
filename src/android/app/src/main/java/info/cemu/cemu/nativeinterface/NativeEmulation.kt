@@ -59,4 +59,8 @@ object NativeEmulation {
 
     @JvmStatic
     external fun supportsLoadingCustomDriver(): Boolean
+
+    /** Terminates the emulation process after flushing logs. Never returns. */
+    @JvmStatic
+    external fun quitProcess()
 }

@@ -66,6 +66,19 @@ namespace NativeEmulation
 			CreateAudioDevice(IAudioAPI::AudioAPI::Cubeb, config.pad_channels, config.pad_volume, false);
 	}
 
+	// exit() (called by the core after fatal errors) runs atexit handlers and static destructors in reverse
+	// registration order. Destructors of globals like g_renderer or the Latte std::thread crash while emulation
+	// threads are still running, so we register a handler that ends the process first. Registered again after
+	// statics created later (renderer init) so it always runs before their destructors.
+	void RegisterFastExit()
+	{
+		std::atexit([] {
+			cemuLog_waitForFlush();
+			fflush(nullptr);
+			_exit(0);
+		});
+	}
+
 	void SetDefaultDeviceController()
 	{
 		for (size_t i = 0; i < InputManager::kMaxController; ++i)
@@ -242,13 +255,17 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_setExternalScreenRotatedLeft
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeEmulation_initializeEmulation([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
 {
-	FilesystemAndroid::SetFilesystemCallbacks(std::make_shared<AndroidFilesystemCallbacks>());
-	GetConfigHandle().SetFilename(ActiveSettings::GetConfigPath("settings.xml").generic_wstring());
-	NativeEmulation::CreateCemuDirectories();
-	NetworkConfig::LoadOnce();
-	ActiveSettings::Init();
-	LatteOverlay_init();
-	CemuCommonInit();
+	// filesystem errors (e.g. storage unavailable) must surface as a Java exception, not std::terminate
+	JNIUtils::HandleNativeException(env, [&]() {
+		FilesystemAndroid::SetFilesystemCallbacks(std::make_shared<AndroidFilesystemCallbacks>());
+		GetConfigHandle().SetFilename(ActiveSettings::GetConfigPath("settings.xml").generic_wstring());
+		NativeEmulation::CreateCemuDirectories();
+		NetworkConfig::LoadOnce();
+		ActiveSettings::Init();
+		LatteOverlay_init();
+		CemuCommonInit();
+		NativeEmulation::RegisterFastExit();
+	});
 }
 
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
@@ -256,13 +273,16 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_initializeRenderer(JNIEnv* e
 {
 	static std::unique_ptr<NativeEmulation::TestSurface> testSurface;
 
-	InitializeGlobalVulkan();
 	JNIUtils::HandleNativeException(env, [&]() {
+		// without a loader every Vulkan function pointer is null and the renderer would crash with SIGSEGV
+		if (!InitializeGlobalVulkan())
+			throw std::runtime_error("Failed to load the Vulkan driver. Try a different GPU driver in the settings.");
 		testSurface = std::make_unique<NativeEmulation::TestSurface>();
 
 		WindowSystem::GetWindowInfo().window_main.surface = testSurface->getWindow();
 
 		g_renderer = std::make_unique<VulkanRenderer>();
+		NativeEmulation::RegisterFastExit();
 	});
 }
 
@@ -415,4 +435,15 @@ extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeEmulation_resumeTitle([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
 {
 	CafeSystem::ResumeTitle();
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeEmulation_quitProcess([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	// exit() would run static destructors (g_renderer, the unjoined Latte thread) while the emulation threads are
+	// still running, which crashes. Flush what matters and terminate without them.
+	cemuLog_log(LogType::Force, "Quitting emulation");
+	cemuLog_waitForFlush();
+	fflush(nullptr);
+	_exit(0);
 }

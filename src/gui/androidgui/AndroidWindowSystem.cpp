@@ -8,14 +8,32 @@
 
 WindowSystem::WindowInfo g_window_info{};
 
-std::shared_mutex g_mutex;
+static std::atomic<WindowSystem::ErrorDialogHandler> s_errorDialogHandler = nullptr;
 
 void WindowSystem::Create()
 {
 }
 
+void WindowSystem::SetErrorDialogHandler(ErrorDialogHandler handler)
+{
+	s_errorDialogHandler = handler;
+}
+
 void WindowSystem::ShowErrorDialog(std::string_view message, std::string_view title, std::optional<WindowSystem::ErrorCategory> /*errorId*/)
 {
+	cemuLog_log(LogType::Force, "Error: {}{}{}", title, title.empty() ? "" : " - ", message);
+	// Callers often exit() right after this, so persist the error for the next app launch as well
+	try
+	{
+		std::ofstream file(ActiveSettings::GetUserDataPath("last_error.txt"), std::ios::out | std::ios::trunc);
+		file << (title.empty() ? std::string_view("Error") : title) << '\n'
+			 << message << '\n';
+	}
+	catch (const std::exception&)
+	{
+	}
+	if (auto handler = s_errorDialogHandler.load())
+		handler(message, title);
 }
 
 WindowSystem::WindowInfo& WindowSystem::GetWindowInfo()

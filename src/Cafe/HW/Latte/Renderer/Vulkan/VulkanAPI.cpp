@@ -158,6 +158,7 @@ constexpr auto CUSTOM_DRIVER_LIB_NAME = "custom_vulkan.so";
 #include <rapidjson/istreamwrapper.h>
 #include "config/ActiveSettings.h"
 #include "Cafe/GameProfile/GameProfile.h"
+#include "WindowSystem.h"
 
 std::string get_custom_driver_lib_name(const fs::path& driver_path)
 {
@@ -169,10 +170,19 @@ std::string get_custom_driver_lib_name(const fs::path& driver_path)
 	rapidjson::Document doc;
 	doc.ParseStream(str);
 
-	if (!doc.HasMember(LIB_NAME_MEMBER) || !doc[LIB_NAME_MEMBER].IsString())
+	if (doc.HasParseError() || !doc.IsObject() || !doc.HasMember(LIB_NAME_MEMBER) || !doc[LIB_NAME_MEMBER].IsString())
+	{
+		cemuLog_log(LogType::Force, "Custom driver: invalid meta.json in {}", _pathToUtf8(driver_path));
 		return {};
+	}
 
 	std::string lib_name = doc[LIB_NAME_MEMBER].GetString();
+	// must be a plain file name inside the driver folder
+	if (lib_name.empty() || fs::path(lib_name).filename().string() != lib_name || lib_name == "." || lib_name == "..")
+	{
+		cemuLog_log(LogType::Force, "Custom driver: invalid libraryName \"{}\"", lib_name);
+		return {};
+	}
 
 	std::error_code ec;
 	if (!fs::exists(driver_path / lib_name, ec))
@@ -212,6 +222,13 @@ void* load_custom_driver()
 
 	std::error_code ec;
 	fs::copy(fs::path(driver_path.value()) / driver_name, ActiveSettings::GetInternalPath(CUSTOM_DRIVER_LIB_NAME), fs::copy_options::overwrite_existing, ec);
+	if (ec)
+	{
+		// don't silently load a stale custom_vulkan.so from a previously selected driver
+		cemuLog_log(LogType::Force, "Custom driver: failed to copy {}: {}", driver_name, ec.message());
+		WindowSystem::ShowErrorDialog(fmt::format("Could not load the custom GPU driver \"{}\" ({}). The system driver will be used.", driver_name, ec.message()), "Custom driver");
+		return nullptr;
+	}
 
 	void* vulkan_so = adrenotools_open_libvulkan(
 		RTLD_NOW | RTLD_LOCAL,
@@ -225,6 +242,7 @@ void* load_custom_driver()
 	if (!vulkan_so)
 	{
 		cemuLog_log(LogType::Force, "Failed to load custom driver");
+		WindowSystem::ShowErrorDialog(fmt::format("Could not load the custom GPU driver \"{}\". The system driver will be used.", driver_name), "Custom driver");
 		return nullptr;
 	}
 	cemuLog_log(LogType::Force, "Loaded custom driver");
@@ -254,10 +272,10 @@ void* dlopen_vulkan_loader()
 
 bool InitializeGlobalVulkan()
 {
-	g_vulkan_so = dlopen_vulkan_loader();
-
 	if (g_vulkan_available)
-		return true;
+		return true; // already loaded, don't dlopen (and on Android re-copy the custom driver) again
+
+	g_vulkan_so = dlopen_vulkan_loader();
 
 	if (!g_vulkan_so)
 	{

@@ -15,6 +15,7 @@ fun ActivityContent(content: @Composable () -> Unit) {
             color = MaterialTheme.colorScheme.background
         ) {
             content()
+            NativeErrorDialogHost()
         }
     }
 }

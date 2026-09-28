@@ -126,7 +126,11 @@ Java_info_cemu_cemu_nativeinterface_NativeGraphicPacks_getGraphicPack(JNIEnv* en
 {
 	jclass graphicPackClass = env->FindClass("info/cemu/cemu/nativeinterface/NativeGraphicPacks$GraphicPack");
 	jmethodID graphicPackCtorId = env->GetMethodID(graphicPackClass, "<init>", "(JZLjava/lang/String;Ljava/lang/String;[Linfo/cemu/cemu/nativeinterface/NativeGraphicPacks$GraphicPackPreset;)V");
-	const auto& graphicPack = NativeGraphicPacks::g_graphicPacks.at(id);
+	// ids can be stale after a refresh; .at() would throw through JNI and terminate the app
+	auto graphicPackIt = NativeGraphicPacks::g_graphicPacks.find(id);
+	if (graphicPackIt == NativeGraphicPacks::g_graphicPacks.end())
+		return nullptr;
+	const auto& graphicPack = graphicPackIt->second;
 
 	jstring graphicPackName = JNIUtils::ToJString(env, graphicPack->GetName());
 	jstring graphicPackDescription = JNIUtils::ToJString(env, graphicPack->GetDescription());
@@ -143,7 +147,10 @@ Java_info_cemu_cemu_nativeinterface_NativeGraphicPacks_getGraphicPack(JNIEnv* en
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeGraphicPacks_setGraphicPackActive([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jlong id, jboolean active)
 {
-	const auto& graphicPack = NativeGraphicPacks::g_graphicPacks.at(id);
+	auto graphicPackIt = NativeGraphicPacks::g_graphicPacks.find(id);
+	if (graphicPackIt == NativeGraphicPacks::g_graphicPacks.end())
+		return;
+	const auto& graphicPack = graphicPackIt->second;
 	graphicPack->SetEnabled(active);
 	NativeGraphicPacks::SaveGraphicPackStateToConfig(graphicPack);
 }
@@ -152,7 +159,10 @@ extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeGraphicPacks_setGraphicPackActivePreset([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jlong id, jstring category, jstring preset)
 {
 	std::string presetCategory = category == nullptr ? "" : JNIUtils::FromJString(env, category);
-	const auto& graphicPack = NativeGraphicPacks::g_graphicPacks.at(id);
+	auto graphicPackIt = NativeGraphicPacks::g_graphicPacks.find(id);
+	if (graphicPackIt == NativeGraphicPacks::g_graphicPacks.end())
+		return;
+	const auto& graphicPack = graphicPackIt->second;
 	graphicPack->SetActivePreset(presetCategory, JNIUtils::FromJString(env, preset));
 	NativeGraphicPacks::SaveGraphicPackStateToConfig(graphicPack);
 }
@@ -160,5 +170,14 @@ Java_info_cemu_cemu_nativeinterface_NativeGraphicPacks_setGraphicPackActivePrese
 extern "C" [[maybe_unused]] JNIEXPORT jobjectArray JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeGraphicPacks_getGraphicPackPresets(JNIEnv* env, [[maybe_unused]] jclass clazz, jlong id)
 {
-	return NativeGraphicPacks::GetGraphicPresets(env, NativeGraphicPacks::g_graphicPacks.at(id), id);
+	auto graphicPackIt = NativeGraphicPacks::g_graphicPacks.find(id);
+	if (graphicPackIt == NativeGraphicPacks::g_graphicPacks.end())
+	{
+		// Kotlin declares the result non-null
+		jclass presetClass = env->FindClass("info/cemu/cemu/nativeinterface/NativeGraphicPacks$GraphicPackPreset");
+		jobjectArray emptyPresets = env->NewObjectArray(0, presetClass, nullptr);
+		env->DeleteLocalRef(presetClass);
+		return emptyPresets;
+	}
+	return NativeGraphicPacks::GetGraphicPresets(env, graphicPackIt->second, id);
 }

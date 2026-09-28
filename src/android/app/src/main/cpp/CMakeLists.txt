@@ -9,6 +9,7 @@ add_library(CemuAndroid SHARED
         NativeActiveSettings.cpp
         NativeEmulatedUSBDevices.cpp
         NativeEmulation.cpp
+        NativeErrors.cpp
         NativeGameTitles.cpp
         NativeGraphicPacks.cpp
         NativeInput.cpp
@@ -24,6 +25,7 @@ cemu_use_precompiled_header(CemuAndroid)
 
 target_link_libraries(CemuAndroid PRIVATE
         -landroid
+        -llog
         CemuCommon
         CemuAudio
         CemuComponents

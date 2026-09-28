@@ -14,4 +14,6 @@ Java_info_cemu_cemu_nativeinterface_NativeLogging_crashLog(JNIEnv* env, [[maybe_
 		return; // give up if crashlog was already created
 	CrashLog_WriteLine("Unhandled exception from java code");
 	CrashLog_WriteLine(JNIUtils::FromJString(env, stacktrace));
+	// the process dies right after this, make sure the trace reaches log.txt
+	cemuLog_waitForFlush();
 }

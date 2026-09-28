@@ -27,10 +27,10 @@ import info.cemu.cemu.emulation.input.DeviceMotionHandler
 import info.cemu.cemu.emulation.input.HotkeyManager
 import info.cemu.cemu.emulation.input.InputHandler
 import info.cemu.cemu.emulation.input.NativeInputDeviceListener
+import info.cemu.cemu.nativeinterface.NativeEmulation
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlin.system.exitProcess
 
 private class InputDelegateManager(context: Context) {
     private val nativeInputDeviceListener = NativeInputDeviceListener(context)
@@ -181,7 +181,8 @@ class EmulationActivity : AppCompatActivity() {
     private fun onQuit() {
         EmulationSessionState.syncSavesToCustomRoot(this)
         finish()
-        exitProcess(0)
+        // not exitProcess(): exit() runs native static destructors while emulation threads still run (crash)
+        NativeEmulation.quitProcess()
     }
 
     companion object {

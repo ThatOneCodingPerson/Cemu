@@ -8,6 +8,7 @@ import androidx.datastore.dataStoreFile
 import info.cemu.cemu.common.ui.localization.DEFAULT_LANGUAGE
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
 
@@ -68,14 +69,29 @@ data class AppSettings(
 object AppSettingsSerializer : Serializer<AppSettings> {
     override val defaultValue: AppSettings = AppSettings()
 
-    override suspend fun readFrom(input: InputStream): AppSettings = try {
-        Json.decodeFromString<AppSettings>(input.readBytes().decodeToString())
-    } catch (_: Exception) {
-        defaultValue
+    // Builds with a different schema (older/newer versions, dual vs non-dual) must not wipe the
+    // settings, which include the custom storage root: ignore unknown keys and bad enum values.
+    private val json = Json {
+        ignoreUnknownKeys = true
+        coerceInputValues = true
+    }
+
+    /** Where an undecodable settings file is copied before falling back to defaults. */
+    @Volatile
+    var backupFile: File? = null
+
+    override suspend fun readFrom(input: InputStream): AppSettings {
+        val text = input.readBytes().decodeToString()
+        return try {
+            json.decodeFromString<AppSettings>(text)
+        } catch (_: Exception) {
+            runCatching { backupFile?.writeText(text) }
+            defaultValue
+        }
     }
 
     override suspend fun writeTo(t: AppSettings, output: OutputStream) {
-        output.write(Json.encodeToString(t).encodeToByteArray())
+        output.write(json.encodeToString(t).encodeToByteArray())
     }
 }
 
@@ -85,6 +101,7 @@ object AppSettingsStore {
         get() = _dataStore
 
     fun init(context: Context) {
+        AppSettingsSerializer.backupFile = context.dataStoreFile("appSettings.json.bad")
         _dataStore = MultiProcessDataStoreFactory.create(
             serializer = AppSettingsSerializer,
             corruptionHandler = null,

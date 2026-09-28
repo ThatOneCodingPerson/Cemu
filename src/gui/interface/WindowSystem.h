@@ -95,6 +95,11 @@ namespace WindowSystem
 	};
 
 	void ShowErrorDialog(std::string_view message, std::string_view title, std::optional<ErrorCategory> errorCategory = {});
+#if BOOST_PLAT_ANDROID
+	// the JNI layer registers how errors are shown to the user (AndroidWindowSystem has no JNI access)
+	using ErrorDialogHandler = void (*)(std::string_view message, std::string_view title);
+	void SetErrorDialogHandler(ErrorDialogHandler handler);
+#endif
 	inline void ShowErrorDialog(std::string_view message, std::optional<ErrorCategory> errorCategory = {})
 	{
 		ShowErrorDialog(message, "", errorCategory);

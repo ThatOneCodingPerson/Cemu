@@ -14,7 +14,94 @@
 #endif
 
 #if BOOST_PLAT_ANDROID
-#include <boost/stacktrace.hpp>
+#include <android/log.h>
+#include <fcntl.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+#include "config/ActiveSettings.h"
+
+// On Android the handler only records a short, async-signal-safe note (logcat + crash.txt) and then gives the
+// signal back to the previously installed handler (debuggerd, reached through ART's sigchain). That writes a
+// tombstone with native backtraces of all threads and lets Android report the crash normally.
+namespace
+{
+	constexpr int ANDROID_HANDLED_SIGNALS[] = {SIGSEGV, SIGBUS, SIGFPE, SIGILL, SIGABRT, SIGTRAP, SIGSYS};
+	struct sigaction s_previousActions[NSIG]{};
+	std::atomic_flag s_crashInProgress = ATOMIC_FLAG_INIT;
+	char s_crashFilePath[512]{};
+
+	struct SignalSafeText
+	{
+		char data[256];
+		size_t length = 0;
+
+		void Append(const char* text)
+		{
+			while (*text && length < sizeof(data) - 1)
+				data[length++] = *text++;
+		}
+
+		void AppendNumber(uint64 value, uint32 base)
+		{
+			char digits[24];
+			size_t count = 0;
+			do
+			{
+				digits[count++] = "0123456789abcdef"[value % base];
+				value /= base;
+			} while (value != 0 && count < sizeof(digits));
+			while (count > 0 && length < sizeof(data) - 1)
+				data[length++] = digits[--count];
+		}
+
+		void AppendSigned(sint64 value)
+		{
+			if (value < 0)
+			{
+				Append("-");
+				value = -value;
+			}
+			AppendNumber((uint64)value, 10);
+		}
+	};
+} // namespace
+
+void handlerDumpingSignalAndroid(int sig, siginfo_t* info, void* context)
+{
+	if (!s_crashInProgress.test_and_set())
+	{
+		SignalSafeText text;
+		text.Append("Cemu crashed: signal ");
+		text.AppendSigned(sig);
+		text.Append(" code ");
+		text.AppendSigned(info->si_code);
+		text.Append(" addr 0x");
+		text.AppendNumber((uint64)(uintptr_t)info->si_addr, 16);
+#if defined(__aarch64__)
+		text.Append(" pc 0x");
+		text.AppendNumber(((ucontext_t*)context)->uc_mcontext.pc, 16);
+#endif
+		text.Append(" tid ");
+		text.AppendSigned(gettid());
+		text.data[text.length] = '\0';
+
+		__android_log_write(ANDROID_LOG_FATAL, "Cemu", text.data);
+		if (s_crashFilePath[0] != '\0')
+		{
+			int fd = open(s_crashFilePath, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+			if (fd >= 0)
+			{
+				text.Append("\n");
+				(void)!write(fd, text.data, text.length);
+				close(fd);
+			}
+		}
+	}
+	// restore the previous handler and re-queue the signal. It is delivered once we return (all signals are masked
+	// while in here). Other threads crashing at the same time skip the note above and go straight to debuggerd.
+	sigaction(sig, &s_previousActions[sig], nullptr);
+	syscall(__NR_rt_tgsigqueueinfo, getpid(), gettid(), sig, info);
+}
 #endif
 
 #if BOOST_OS_LINUX && !BOOST_PLAT_ANDROID
@@ -93,7 +180,7 @@ void handlerDumpingSignal(int sig, siginfo_t *info, void *context)
 	}
     CrashLog_WriteLine(fmt::format("Error: signal {}:", sig));
 #if BOOST_PLAT_ANDROID
-    CrashLog_WriteLine(to_string(boost::stacktrace::stacktrace()));
+    CrashLog_WriteLine("Native backtrace: see the Android tombstone"); // Android uses handlerDumpingSignalAndroid
 #else
 	void* backtraceArray[128];
 	size_t size;
@@ -155,6 +242,24 @@ void handler_SIGINT(int sig)
 
 void ExceptionHandler_Init()
 {
+#if BOOST_PLAT_ANDROID
+	try
+	{
+		const std::string crashFilePath = _pathToUtf8(ActiveSettings::GetUserDataPath("crash.txt"));
+		strncpy(s_crashFilePath, crashFilePath.c_str(), sizeof(s_crashFilePath) - 1);
+	}
+	catch (const std::exception&)
+	{
+	}
+	// SIGQUIT is left alone (ART uses it to dump ANR traces), as are SIGINT/SIGTERM
+	struct sigaction androidAction{};
+	sigfillset(&androidAction.sa_mask);
+	androidAction.sa_flags = SA_SIGINFO | SA_ONSTACK;
+	androidAction.sa_sigaction = handlerDumpingSignalAndroid;
+	for (int sig : ANDROID_HANDLED_SIGNALS)
+		sigaction(sig, &androidAction, &s_previousActions[sig]);
+	return;
+#endif
 	struct sigaction action;
 	action.sa_flags = 0;
 	sigfillset(&action.sa_mask); // don't allow signals to be interrupted

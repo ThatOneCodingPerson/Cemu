@@ -243,19 +243,25 @@ Java_info_cemu_cemu_nativeinterface_NativeInput_getControllersCount(JNIEnv* env,
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeInput_setVPADScreenToggle([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jint index, jboolean enabled)
 {
-	auto emulatedController = EmulatedControllerManager::GetController(index).GetControllerPtr();
-	if (emulatedController == nullptr || emulatedController->type() != EmulatedController::Type::VPAD)
-		throw std::runtime_error(fmt::format("Invalid controller type for controller {}, expected VPAD", index));
-	dynamic_cast<VPADController*>(emulatedController.get())->set_screen_toggle(enabled);
+	JNIUtils::HandleNativeException(env, [&]() {
+		auto emulatedController = EmulatedControllerManager::GetController(index).GetControllerPtr();
+		if (emulatedController == nullptr || emulatedController->type() != EmulatedController::Type::VPAD)
+			throw std::runtime_error(fmt::format("Invalid controller type for controller {}, expected VPAD", index));
+		dynamic_cast<VPADController*>(emulatedController.get())->set_screen_toggle(enabled);
+	});
 }
 
 extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeInput_getVPADScreenToggle([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jint index)
 {
-	auto emulatedController = EmulatedControllerManager::GetController(index).GetControllerPtr();
-	if (emulatedController == nullptr || emulatedController->type() != EmulatedController::Type::VPAD)
-		throw std::runtime_error(fmt::format("Invalid controller type for controller {}, expected VPAD", index));
-	return dynamic_cast<VPADController*>(emulatedController.get())->is_screen_active_toggle();
+	jboolean screenToggle = JNI_FALSE;
+	JNIUtils::HandleNativeException(env, [&]() {
+		auto emulatedController = EmulatedControllerManager::GetController(index).GetControllerPtr();
+		if (emulatedController == nullptr || emulatedController->type() != EmulatedController::Type::VPAD)
+			throw std::runtime_error(fmt::format("Invalid controller type for controller {}, expected VPAD", index));
+		screenToggle = dynamic_cast<VPADController*>(emulatedController.get())->is_screen_active_toggle();
+	});
+	return screenToggle;
 }
 
 extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
