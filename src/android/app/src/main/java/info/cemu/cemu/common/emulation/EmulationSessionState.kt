@@ -1,4 +1,4 @@
-package info.cemu.cemu.emulation
+package info.cemu.cemu.common.emulation
 
 import android.content.Context
 import info.cemu.cemu.common.storage.CemuDataStorage

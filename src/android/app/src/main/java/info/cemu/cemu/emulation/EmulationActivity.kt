@@ -16,6 +16,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import info.cemu.cemu.BuildConfig
 import info.cemu.cemu.common.android.display.DisplayUtils
 import info.cemu.cemu.common.android.inputevent.isFromPhysicalController
+import info.cemu.cemu.common.emulation.EmulationSessionState
 import info.cemu.cemu.common.settings.AppSettingsStore
 import info.cemu.cemu.common.ui.components.ActivityContent
 import info.cemu.cemu.common.ui.localization.TranslatableContent

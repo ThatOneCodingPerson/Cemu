@@ -8,7 +8,7 @@ import info.cemu.cemu.common.storage.CemuSaveSyncManager
 import info.cemu.cemu.common.storage.CemuDataStorage
 import info.cemu.cemu.common.ui.localization.setLanguage
 import info.cemu.cemu.common.ui.localization.setTranslations
-import info.cemu.cemu.emulation.EmulationSessionState
+import info.cemu.cemu.common.emulation.EmulationSessionState
 import info.cemu.cemu.nativeinterface.NativeActiveSettings.initializeActiveSettings
 import info.cemu.cemu.nativeinterface.NativeActiveSettings.setInternalDir
 import info.cemu.cemu.nativeinterface.NativeActiveSettings.setNativeLibDir

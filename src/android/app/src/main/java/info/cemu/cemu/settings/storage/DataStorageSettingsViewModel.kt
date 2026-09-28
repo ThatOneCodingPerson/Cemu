@@ -7,7 +7,7 @@ import info.cemu.cemu.common.settings.AppSettings
 import info.cemu.cemu.common.settings.AppSettingsStore
 import info.cemu.cemu.common.storage.CemuDataStorage
 import info.cemu.cemu.common.storage.CemuSaveSyncManager
-import info.cemu.cemu.emulation.EmulationSessionState
+import info.cemu.cemu.common.emulation.EmulationSessionState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
