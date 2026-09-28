@@ -10,14 +10,19 @@ object NativeEmulation {
     external fun setDPI(dpi: Float)
 
 
+    /**
+     * Publishes the surface of a canvas; the GPU thread creates the swapchain for it. Call from
+     * SurfaceHolder.Callback.surfaceChanged (repeated calls for the same surface are ignored).
+     */
     @JvmStatic
     external fun setSurface(surface: Surface?, isMainCanvas: Boolean)
 
+    /**
+     * Call from SurfaceHolder.Callback.surfaceDestroyed. Waits briefly until the GPU thread stopped
+     * using the surface. Returns false if it wasn't the canvas' current surface.
+     */
     @JvmStatic
-    external fun initializeSurface(isMainCanvas: Boolean)
-
-    @JvmStatic
-    external fun clearPadSurface()
+    external fun clearSurface(surface: Surface?, isMainCanvas: Boolean): Boolean
 
     @JvmStatic
     external fun setSurfaceSize(width: Int, height: Int, isMainCanvas: Boolean)

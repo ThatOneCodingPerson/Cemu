@@ -446,6 +446,19 @@ namespace snd_core
 		}
 	}
 
+	std::atomic_bool s_outputPaused = false;
+
+	void AXOut_updateDevicePlayState(bool isPlaying);
+
+	// stops host audio output while emulation is paused (e.g. the app is in the background on Android).
+	// AXOut_update resumes the devices once unpaused
+	void AXOut_SetPaused(bool paused)
+	{
+		s_outputPaused = paused;
+		if (paused)
+			AXOut_updateDevicePlayState(false);
+	}
+
 	void AXOut_updateDevicePlayState(bool isPlaying)
 	{
 		std::shared_lock lock(g_audioMutex);
@@ -481,6 +494,10 @@ namespace snd_core
 		constexpr static auto kWaitDuration = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::milliseconds(3));
 		constexpr static auto kWaitDurationFast = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::microseconds(2900));
 		constexpr static auto kWaitDurationMinimum = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::microseconds(1700));
+
+		// this keeps getting called while the PPC threads are suspended, don't restart the devices then
+		if (s_outputPaused)
+			return;
 
 		// if we haven't buffered any blocks, we will wait less time than usual
 		bool additional_blocks_required = false;

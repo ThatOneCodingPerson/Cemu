@@ -7,6 +7,26 @@
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
 
+#if BOOST_PLAT_ANDROID
+SwapchainInfoVk::SwapchainInfoVk(bool mainWindow, Vector2i size, ANativeWindow* window) : mainWindow(mainWindow), m_desiredExtent(size), m_window(window)
+{
+	auto renderer = VulkanRenderer::GetInstance();
+	m_instance = renderer->GetVkInstance();
+	m_logicalDevice = renderer->GetLogicalDevice();
+	m_physicalDevice = renderer->GetPhysicalDevice();
+
+	ANativeWindow_acquire(m_window);
+	try
+	{
+		m_surface = VulkanRenderer::CreateAndroidSurface(m_instance, m_window);
+	}
+	catch (...)
+	{
+		ANativeWindow_release(m_window); // the destructor doesn't run when the constructor throws
+		throw;
+	}
+}
+#else
 SwapchainInfoVk::SwapchainInfoVk(bool mainWindow, Vector2i size) : mainWindow(mainWindow), m_desiredExtent(size)
 {
 	auto& windowHandleInfo = mainWindow ? WindowSystem::GetWindowInfo().canvas_main : WindowSystem::GetWindowInfo().canvas_pad;
@@ -15,12 +35,9 @@ SwapchainInfoVk::SwapchainInfoVk(bool mainWindow, Vector2i size) : mainWindow(ma
 	m_logicalDevice = renderer->GetLogicalDevice();
 	m_physicalDevice = renderer->GetPhysicalDevice();
 
-#if BOOST_PLAT_ANDROID
-	m_surface = renderer->CreateFramebufferSurface(m_instance, windowHandleInfo, &m_currentWindow);
-#else
 	m_surface = renderer->CreateFramebufferSurface(m_instance, windowHandleInfo);
-#endif
 }
+#endif
 
 
 SwapchainInfoVk::~SwapchainInfoVk()
@@ -28,22 +45,24 @@ SwapchainInfoVk::~SwapchainInfoVk()
 	Cleanup();
 	if(m_surface != VK_NULL_HANDLE)
 		vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
+#if BOOST_PLAT_ANDROID
+	if (m_window)
+		ANativeWindow_release(m_window);
+#endif
 }
 
 #if BOOST_PLAT_ANDROID
+// recreate the VkSurface for the same window after VK_ERROR_SURFACE_LOST_KHR. A replaced window gets a whole new
+// SwapchainInfoVk instead (VulkanRenderer::SyncCanvasWindow)
 void SwapchainInfoVk::RecreateSurface()
 {
-	if (!mainWindow)
-		return;
-
-	auto& windowHandleInfo = WindowSystem::GetWindowInfo().canvas_main;
-
-	windowHandleInfo.surface.wait(m_currentWindow);
-
-	auto newSurface = VulkanRenderer::CreateFramebufferSurface(m_instance, windowHandleInfo, &m_currentWindow);
-	vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
-	m_surface = newSurface;
-
+	// only one VkSurface may exist per ANativeWindow at a time, so destroy the lost one first
+	if (m_surface != VK_NULL_HANDLE)
+	{
+		vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
+		m_surface = VK_NULL_HANDLE;
+	}
+	m_surface = VulkanRenderer::CreateAndroidSurface(m_instance, m_window);
 	surfaceWasLost = false;
 }
 #endif
@@ -53,9 +72,21 @@ void SwapchainInfoVk::Create()
 #if BOOST_PLAT_ANDROID
 	if (surfaceWasLost)
 		RecreateSurface();
-#endif
 
+	SwapchainSupportDetails details;
+	try
+	{
+		details = QuerySwapchainSupport(m_surface, m_physicalDevice);
+	}
+	catch (const std::exception&)
+	{
+		// most likely VK_ERROR_SURFACE_LOST_KHR, recreate the surface on the next attempt
+		surfaceWasLost = true;
+		throw;
+	}
+#else
 	const auto details = QuerySwapchainSupport(m_surface, m_physicalDevice);
+#endif
 	m_surfaceFormat = ChooseSurfaceFormat(details.formats);
 	m_actualExtent = ChooseSwapExtent(details.capabilities);
 

@@ -190,12 +190,16 @@ public:
 
 	void GetDeviceFeatures();
 	void DetermineVendor();
+#if !BOOST_PLAT_ANDROID
 	void InitializeSurface(const Vector2i& size, bool mainWindow);
+#endif
 
 	const std::unique_ptr<SwapchainInfoVk>& GetChainInfoPtr(bool mainWindow) const;
 	SwapchainInfoVk& GetChainInfo(bool mainWindow) const;
 
+#if !BOOST_PLAT_ANDROID
 	void StopUsingPadAndWait();
+#endif
 	bool IsPadWindowActive() override;
 
 	void HandleScreenshotRequest(LatteTextureView* texView, bool padView) override;
@@ -427,7 +431,17 @@ private:
 	}m_state;
 
 	std::unique_ptr<SwapchainInfoVk> m_mainSwapchainInfo{}, m_padSwapchainInfo{};
+#if BOOST_PLAT_ANDROID
+	// Android: swapchains follow the windows published by the UI thread (WindowSystem::AndroidCanvasInfo). Only the
+	// Latte thread creates/destroys them, see SyncCanvasWindow()
+	void SetCanvasConsumerActive(bool active);
+	void SyncCanvasWindow(bool mainWindow);
+	uint64 m_canvasAppliedGeneration[2]{};
+	bool m_canvasHasWindow[2]{};
+	std::chrono::steady_clock::time_point m_canvasRetryTime[2]{};
+#else
 	std::atomic_flag m_destroyPadSwapchainNextAcquire{};
+#endif
 	bool IsSwapchainInfoValid(bool mainWindow) const;
 
 	VkRenderPass m_imguiRenderPass = VK_NULL_HANDLE;

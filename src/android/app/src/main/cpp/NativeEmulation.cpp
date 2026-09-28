@@ -189,8 +189,7 @@ namespace NativeEmulation
 			m_surfaceTexture = env->NewGlobalRef(localSurfaceTexture);
 			m_surface = env->NewGlobalRef(localSurface);
 
-			m_window = ANativeWindow_fromSurface(env, m_surface);
-			ANativeWindow_acquire(m_window);
+			m_window = ANativeWindow_fromSurface(env, m_surface); // returns an acquired reference
 
 			env->DeleteLocalRef(localSurfaceTexture);
 			env->DeleteLocalRef(localSurface);
@@ -241,9 +240,8 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_setReplaceTVWithPadView([[ma
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeEmulation_setSwapScreens([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jboolean swapped)
 {
-	auto& windowInfo = WindowSystem::GetWindowInfo();
-	windowInfo.swap_screens = swapped;
-	LatteGPUState.isDRCPrimary = swapped;
+	// applied on the GPU thread (LatteRenderTarget_itHLECopyColorBufferToScanBuffer), which owns isDRCPrimary
+	WindowSystem::GetWindowInfo().swap_screens = swapped;
 }
 
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
@@ -293,12 +291,6 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_setDPI([[maybe_unused]] JNIE
 	windowInfo.dpi_scale = windowInfo.pad_dpi_scale = dpi;
 }
 
-extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
-Java_info_cemu_cemu_nativeinterface_NativeEmulation_clearPadSurface([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
-{
-	VulkanRenderer::GetInstance()->StopUsingPadAndWait();
-	WindowSystem::GetWindowInfo().pad_open = false;
-}
 
 extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeEmulation_supportsLoadingCustomDriver([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
@@ -306,38 +298,71 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_supportsLoadingCustomDriver(
 	return SupportsLoadingCustomDriver();
 }
 
+// Publishes the window of a canvas for the GPU thread, which creates the Vulkan surface/swapchain for it (see
+// WindowSystem::AndroidCanvasInfo and VulkanRenderer::SyncCanvasWindow). Never blocks.
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeEmulation_setSurface(JNIEnv* env, [[maybe_unused]] jclass clazz, jobject surface, jboolean isMainCanvas)
 {
-	JNIUtils::HandleNativeException(env, [&]() {
-		auto& windowHandleInfo = isMainCanvas ? WindowSystem::GetWindowInfo().canvas_main : WindowSystem::GetWindowInfo().canvas_pad;
-		auto oldWindow = windowHandleInfo.surface.load();
-		if (oldWindow != nullptr)
-			ANativeWindow_release(static_cast<ANativeWindow*>(oldWindow));
-		auto newSurface = ANativeWindow_fromSurface(env, surface);
-		ANativeWindow_acquire(newSurface);
-		windowHandleInfo.surface = newSurface;
-		windowHandleInfo.surface.notify_all();
-	});
+	auto& canvas = WindowSystem::GetWindowInfo().GetAndroidCanvas(isMainCanvas);
+	ANativeWindow* newWindow = surface != nullptr ? ANativeWindow_fromSurface(env, surface) : nullptr; // acquired reference
+	ANativeWindow* oldWindow = nullptr;
+	{
+		std::scoped_lock lock(canvas.mutex);
+		// surfaceChanged is also called for size changes of the same surface; the size is applied by the swapchain
+		// update. Recreating the VkSurface for the same window would fail with VK_ERROR_NATIVE_WINDOW_IN_USE_KHR.
+		// (We hold a reference to the current window, so a different surface can't have the same address.)
+		if (newWindow == canvas.window)
+		{
+			if (newWindow)
+				ANativeWindow_release(newWindow);
+			return;
+		}
+		oldWindow = static_cast<ANativeWindow*>(canvas.window);
+		canvas.window = newWindow;
+		++canvas.generation;
+	}
+	if (!isMainCanvas)
+		WindowSystem::GetWindowInfo().pad_open = newWindow != nullptr;
+	if (oldWindow)
+		ANativeWindow_release(oldWindow);
 }
 
-extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
-Java_info_cemu_cemu_nativeinterface_NativeEmulation_initializeSurface(JNIEnv* env, [[maybe_unused]] jclass clazz, jboolean isMainCanvas)
+// Called from SurfaceHolder.Callback.surfaceDestroyed. Unpublishes the window if it is the current one of the canvas
+// and waits (bounded) until the GPU thread stopped using it, since Android tears the surface down once this returns.
+// Returns whether the surface was the current one (a stale callback of a replaced view returns false).
+extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeEmulation_clearSurface(JNIEnv* env, [[maybe_unused]] jclass clazz, jobject surface, jboolean isMainCanvas)
 {
-	JNIUtils::HandleNativeException(env, [&]() {
-		int width, height;
-		if (isMainCanvas)
-		{
-			WindowSystem::GetWindowPhysSize(width, height);
-		}
-		else
-		{
-			WindowSystem::GetPadWindowPhysSize(width, height);
-			WindowSystem::GetWindowInfo().pad_open = true;
-		}
+	constexpr auto MAX_WAIT_FOR_GPU_THREAD = std::chrono::milliseconds(500);
 
-		VulkanRenderer::GetInstance()->InitializeSurface({width, height}, isMainCanvas);
-	});
+	auto& canvas = WindowSystem::GetWindowInfo().GetAndroidCanvas(isMainCanvas);
+	ANativeWindow* window = surface != nullptr ? ANativeWindow_fromSurface(env, surface) : nullptr;
+	ANativeWindow* oldWindow = nullptr;
+	bool wasCurrent = false;
+	{
+		std::unique_lock lock(canvas.mutex);
+		wasCurrent = window != nullptr && window == canvas.window;
+		if (wasCurrent)
+		{
+			oldWindow = static_cast<ANativeWindow*>(canvas.window);
+			canvas.window = nullptr;
+			const uint64 generation = ++canvas.generation;
+			if (!isMainCanvas)
+				WindowSystem::GetWindowInfo().pad_open = false;
+			// Never wait unbounded: if the GPU thread is stuck (e.g. compiling shaders) the references it holds keep
+			// the window alive and presenting to it just fails with VK_ERROR_SURFACE_LOST_KHR / OUT_OF_DATE
+			const bool released = canvas.cv.wait_for(lock, MAX_WAIT_FOR_GPU_THREAD, [&] {
+				return !canvas.consumerActive || !canvas.consumerUsesWindow || canvas.appliedGeneration >= generation;
+			});
+			if (!released)
+				cemuLog_log(LogType::Force, "{} surface destroyed while the GPU thread was still using it", isMainCanvas ? "TV" : "GamePad");
+		}
+	}
+	if (oldWindow)
+		ANativeWindow_release(oldWindow);
+	if (window)
+		ANativeWindow_release(window);
+	return wasCurrent;
 }
 
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL

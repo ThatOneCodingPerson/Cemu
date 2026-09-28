@@ -21,7 +21,6 @@ import info.cemu.cemu.common.settings.InputOverlaySettings
 import info.cemu.cemu.common.settings.OverlayInputConfig
 import info.cemu.cemu.nativeinterface.NativeEmulation
 import info.cemu.cemu.nativeinterface.NativeEmulation.PrepareTitleResult
-import info.cemu.cemu.nativeinterface.NativeException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,22 +41,6 @@ data class SideMenuState(
     val isExternalScreenRotatedLeft: Boolean = false,
     val isInputOverlayVisible: Boolean = false,
 )
-
-class ConditionFlags(
-    var isMainConditionMet: Boolean = false, var isPadConditionMet: Boolean = false
-) {
-    fun get(isMain: Boolean): Boolean {
-        return if (isMain) isMainConditionMet else isPadConditionMet
-    }
-
-    fun set(isMain: Boolean, value: Boolean) {
-        if (isMain) {
-            isMainConditionMet = value
-        } else {
-            isPadConditionMet = value
-        }
-    }
-}
 
 sealed interface NativeError {
     data class SurfaceCreationError(val message: String) : NativeError
@@ -169,8 +152,25 @@ class EmulationViewModel(
             null,
         )
 
-    val destroyedSurfaces = ConditionFlags()
-    var setSurfaces = ConditionFlags()
+    // Surface state, only touched on the main thread (SurfaceHolder callbacks and viewModelScope).
+    // The native side creates the swapchains on the GPU thread from the published surfaces.
+    private var isMainSurfaceAvailable = false
+    private var isTitleLaunched = false
+    private var isPausedBySurfaceLoss = false
+
+    private fun pauseForSurfaceLoss() {
+        if (isTitleLaunched && !isPausedBySurfaceLoss) {
+            NativeEmulation.pauseTitle()
+            isPausedBySurfaceLoss = true
+        }
+    }
+
+    private fun resumeAfterSurfaceLoss() {
+        if (isPausedBySurfaceLoss) {
+            isPausedBySurfaceLoss = false
+            NativeEmulation.resumeTitle()
+        }
+    }
 
     private fun updateSurfaceDimensions(isMainCanvas: Boolean, width: Int, height: Int) {
         val newDimensions = SurfaceDimensions(
@@ -195,46 +195,24 @@ class EmulationViewModel(
             width: Int,
             height: Int,
         ) {
-            try {
-                NativeEmulation.setSurfaceSize(width, height, isMainCanvas)
-                updateSurfaceDimensions(isMainCanvas, width, height)
+            NativeEmulation.setSurfaceSize(width, height, isMainCanvas)
+            updateSurfaceDimensions(isMainCanvas, width, height)
+            // also called for size changes of the same surface, the native side ignores those
+            NativeEmulation.setSurface(surfaceHolder.surface, isMainCanvas)
 
-                if (setSurfaces.get(isMainCanvas)) {
-                    return
-                }
-
-                NativeEmulation.setSurface(surfaceHolder.surface, isMainCanvas)
-                val mainSurfaceWasDestroyed = destroyedSurfaces.get(isMain = true)
-
-                if (mainSurfaceWasDestroyed && isMainCanvas) {
-                    NativeEmulation.resumeTitle()
-                }
-
-                setSurfaces.set(isMainCanvas, true)
-
-                val padSurfaceWasSet = setSurfaces.get(isMain = false)
-                if ((!isMainCanvas && !mainSurfaceWasDestroyed) || (isMainCanvas && padSurfaceWasSet)) {
-                    NativeEmulation.initializeSurface(isMainCanvas = false)
-                }
-
-                destroyedSurfaces.set(isMainCanvas, false)
-            } catch (exception: NativeException) {
-                _emulationError.value = NativeError.SurfaceCreationError(exception.message!!)
+            if (isMainCanvas) {
+                isMainSurfaceAvailable = true
+                resumeAfterSurfaceLoss()
             }
         }
 
         override fun surfaceDestroyed(surfaceHolder: SurfaceHolder) {
-            if (setSurfaces.get(isMain = false)) {
-                NativeEmulation.clearPadSurface()
-                setSurfaces.set(isMain = false, false)
-                destroyedSurfaces.set(isMain = false, true)
-            }
-
-            if (isMainCanvas) {
-                NativeEmulation.pauseTitle()
-
-                setSurfaces.set(isMain = true, false)
-                destroyedSurfaces.set(isMain = true, true)
+            // false if this surface was already replaced (e.g. the pad moved between inline view and Presentation)
+            val wasCurrentSurface = NativeEmulation.clearSurface(surfaceHolder.surface, isMainCanvas)
+            if (isMainCanvas && wasCurrentSurface) {
+                isMainSurfaceAvailable = false
+                // the app went to the background (or the view is recreated): stop emulating until it's back
+                pauseForSurfaceLoss()
             }
         }
     }
@@ -248,7 +226,6 @@ class EmulationViewModel(
 
     private suspend fun initializeRenderer() = attemptWithContext(Dispatchers.IO) {
         NativeEmulation.initializeRenderer()
-        NativeEmulation.initializeSurface(isMainCanvas = true)
     }.mapError { NativeError.RendererInitializationError(it) }
 
     private suspend fun prepareTitle(): Either<Unit, NativeError> =
@@ -283,7 +260,16 @@ class EmulationViewModel(
                 .bind { initializeSystems() }
                 .bind { initializeRenderer() }
                 .bind { launchTitle() }
-                .onError { _emulationError.value = it }
+                .fold(
+                    onSuccess = {
+                        isTitleLaunched = true
+                        // the app may have been sent to the background while loading
+                        if (!isMainSurfaceAvailable) {
+                            pauseForSurfaceLoss()
+                        }
+                    },
+                    onError = { _emulationError.value = it },
+                )
 
             _isEmulationInitialized.value = true
         }

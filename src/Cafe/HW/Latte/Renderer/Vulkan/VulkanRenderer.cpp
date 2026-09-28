@@ -926,6 +926,95 @@ VulkanRenderer* VulkanRenderer::GetInstance()
 	return (VulkanRenderer*)g_renderer.get();
 }
 
+#if BOOST_PLAT_ANDROID
+void VulkanRenderer::SetCanvasConsumerActive(bool active)
+{
+	for (bool mainCanvas : {true, false})
+	{
+		auto& canvas = WindowSystem::GetWindowInfo().GetAndroidCanvas(mainCanvas);
+		{
+			std::scoped_lock lock(canvas.mutex);
+			canvas.consumerActive = active;
+			if (!active)
+				canvas.consumerUsesWindow = false;
+		}
+		canvas.cv.notify_all();
+	}
+}
+
+// Applies the window published by the UI thread for a canvas: destroys the old swapchain/VkSurface and creates new
+// ones. Also retries creation when the swapchain became invalid (e.g. surface lost during a rotation).
+// Latte thread only, and only at points where nothing holds a SwapchainInfoVk reference.
+void VulkanRenderer::SyncCanvasWindow(bool mainWindow)
+{
+	auto& canvas = WindowSystem::GetWindowInfo().GetAndroidCanvas(mainWindow);
+	const size_t index = mainWindow ? 0 : 1;
+	auto& chainInfoPtr = mainWindow ? m_mainSwapchainInfo : m_padSwapchainInfo;
+
+	const bool windowChanged = canvas.generation.load() != m_canvasAppliedGeneration[index];
+	const bool retryDue = m_canvasHasWindow[index] && !IsSwapchainInfoValid(mainWindow) && std::chrono::steady_clock::now() >= m_canvasRetryTime[index];
+	if (!windowChanged && !retryDue)
+		return;
+
+	ANativeWindow* window = nullptr;
+	uint64 generation;
+	{
+		std::scoped_lock lock(canvas.mutex);
+		generation = canvas.generation.load();
+		window = static_cast<ANativeWindow*>(canvas.window);
+		if (window)
+		{
+			ANativeWindow_acquire(window); // the UI thread may replace it meanwhile
+			canvas.consumerUsesWindow = true;
+		}
+	}
+
+	// Android allows only one VkSurface per window, so the old chain has to go first
+	if (chainInfoPtr)
+	{
+		draw_endRenderPass();
+		SubmitCommandBuffer();
+		WaitDeviceIdle();
+		chainInfoPtr.reset();
+	}
+
+	if (window)
+	{
+		Vector2i size;
+		if (mainWindow)
+			WindowSystem::GetWindowPhysSize(size.x, size.y);
+		else
+			WindowSystem::GetPadWindowPhysSize(size.x, size.y);
+		try
+		{
+			auto chainInfo = std::make_unique<SwapchainInfoVk>(mainWindow, size, window);
+			chainInfo->Create();
+			chainInfoPtr = std::move(chainInfo);
+		}
+		catch (const std::exception& ex)
+		{
+			cemuLog_log(LogType::Force, "Vulkan: Failed to create the {} swapchain: {}", mainWindow ? "TV" : "GamePad", ex.what());
+			m_canvasRetryTime[index] = std::chrono::steady_clock::now() + std::chrono::milliseconds(250);
+		}
+		// ImGui's render pass depends on the main swapchain format (skip before the first ImguiInit)
+		if (mainWindow && chainInfoPtr && m_imguiRenderPass != VK_NULL_HANDLE)
+		{
+			ImGui_ImplVulkan_Shutdown();
+			ImguiInit();
+		}
+		ANativeWindow_release(window);
+	}
+
+	m_canvasAppliedGeneration[index] = generation;
+	m_canvasHasWindow[index] = window != nullptr;
+	{
+		std::scoped_lock lock(canvas.mutex);
+		canvas.appliedGeneration = generation;
+		canvas.consumerUsesWindow = chainInfoPtr != nullptr;
+	}
+	canvas.cv.notify_all();
+}
+#else
 void VulkanRenderer::InitializeSurface(const Vector2i& size, bool mainWindow)
 {
 	auto& windowHandleInfo = mainWindow ? WindowSystem::GetWindowInfo().canvas_main : WindowSystem::GetWindowInfo().canvas_pad;
@@ -942,6 +1031,7 @@ void VulkanRenderer::InitializeSurface(const Vector2i& size, bool mainWindow)
 		m_padSwapchainInfo->Create();
 	}
 }
+#endif
 
 const std::unique_ptr<SwapchainInfoVk>& VulkanRenderer::GetChainInfoPtr(bool mainWindow) const
 {
@@ -953,11 +1043,13 @@ SwapchainInfoVk& VulkanRenderer::GetChainInfo(bool mainWindow) const
 	return *GetChainInfoPtr(mainWindow);
 }
 
+#if !BOOST_PLAT_ANDROID
 void VulkanRenderer::StopUsingPadAndWait()
 {
 	m_destroyPadSwapchainNextAcquire.test_and_set();
 	m_destroyPadSwapchainNextAcquire.wait(true);
 }
+#endif
 
 bool VulkanRenderer::IsPadWindowActive()
 {
@@ -1798,8 +1890,14 @@ void VulkanRenderer::ImguiInit()
 {
 	VkRenderPass prevRenderPass = m_imguiRenderPass;
 
+	// on Android the main swapchain may not exist yet (no surface) or failed to be created. ImGui is initialized
+	// with defaults then and re-initialized once the swapchain exists (SyncCanvasWindow)
+	const bool hasMainSwapchain = m_mainSwapchainInfo && m_mainSwapchainInfo->IsValid();
+	const VkFormat imguiFormat = hasMainSwapchain ? m_mainSwapchainInfo->m_surfaceFormat.format : VK_FORMAT_R8G8B8A8_UNORM;
+	const uint32 imguiImageCount = hasMainSwapchain ? std::max<uint32>(2, (uint32)m_mainSwapchainInfo->m_swapchainImages.size()) : 2;
+
 	VkAttachmentDescription colorAttachment = {};
-	colorAttachment.format = m_mainSwapchainInfo->m_surfaceFormat.format;
+	colorAttachment.format = imguiFormat;
 	colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
 	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -1834,7 +1932,7 @@ void VulkanRenderer::ImguiInit()
 	info.Queue = m_presentQueue;
 	info.PipelineCache = m_pipeline_cache;
 	info.DescriptorPool = m_descriptorPool;
-	info.MinImageCount = m_mainSwapchainInfo->m_swapchainImages.size();
+	info.MinImageCount = imguiImageCount;
 	info.ImageCount = info.MinImageCount;
 
 	ImGui_ImplVulkan_Init(&info, m_imguiRenderPass);
@@ -1848,12 +1946,21 @@ void VulkanRenderer::Initialize()
 	Renderer::Initialize();
 	InitFirstCommandBuffer();
 	CreatePipelineCache();
+#if BOOST_PLAT_ANDROID
+	// from here on the Latte thread owns the swapchains, create them for the windows published so far
+	SetCanvasConsumerActive(true);
+	SyncCanvasWindow(true);
+	SyncCanvasWindow(false);
+#endif
 	ImguiInit();
 	CreateNullObjects();
 }
 
 void VulkanRenderer::Shutdown()
 {
+#if BOOST_PLAT_ANDROID
+	SetCanvasConsumerActive(false);
+#endif
 	SubmitCommandBuffer();
 	WaitDeviceIdle();
 	// stop compilation threads
@@ -2047,10 +2154,11 @@ bool VulkanRenderer::ImguiBegin(bool mainWindow)
 	if (!Renderer::ImguiBegin(mainWindow))
 		return false;
 
-	auto& chainInfo = GetChainInfo(mainWindow);
-
+	// acquire first, the swapchain may not exist (GetChainInfo would dereference null)
 	if (!AcquireNextSwapchainImage(mainWindow))
 		return false;
+
+	auto& chainInfo = GetChainInfo(mainWindow);
 
 	draw_endRenderPass();
 	m_state.currentPipeline = VK_NULL_HANDLE;
@@ -2974,9 +3082,18 @@ VkPipeline VulkanRenderer::backbufferBlit_createGraphicsPipeline(VkDescriptorSet
 
 bool VulkanRenderer::AcquireNextSwapchainImage(bool mainWindow)
 {
+#if BOOST_PLAT_ANDROID
+	// apply window changes from the UI thread, unless an image of the current swapchain is already in use
+	if (auto& chainInfoPtr = GetChainInfoPtr(mainWindow); !chainInfoPtr || chainInfoPtr->swapchainImageIndex == (uint32)-1)
+		SyncCanvasWindow(mainWindow);
+	// don't present while paused, the app is in the background and its surfaces are going away
+	if (CafeSystem::IsTitlePaused())
+		return false;
+#endif
 	if(!IsSwapchainInfoValid(mainWindow))
 		return false;
 
+#if !BOOST_PLAT_ANDROID
 	if(!mainWindow && m_destroyPadSwapchainNextAcquire.test())
 	{
 		RecreateSwapchain(mainWindow, true);
@@ -2984,6 +3101,7 @@ bool VulkanRenderer::AcquireNextSwapchainImage(bool mainWindow)
 		m_destroyPadSwapchainNextAcquire.notify_all();
 		return false;
 	}
+#endif
 	auto& chainInfo = GetChainInfo(mainWindow);
 
 	if (chainInfo.swapchainImageIndex != -1)
@@ -3022,7 +3140,18 @@ void VulkanRenderer::RecreateSwapchain(bool mainWindow, bool skipCreate)
 	chainInfo.m_desiredExtent = size;
 	if(!skipCreate)
 	{
-		chainInfo.Create();
+		try
+		{
+			chainInfo.Create();
+		}
+		catch (const std::exception&)
+		{
+			// keep ImGui initialized (it was shut down above). The swapchain stays invalid; on Android
+			// SyncCanvasWindow retries creating it
+			if (mainWindow)
+				ImguiInit();
+			throw;
+		}
 	}
 
 	if (mainWindow)
@@ -3172,6 +3301,14 @@ void VulkanRenderer::NotifyLatteCommandProcessorIdle()
 {
 	if (m_submitOnIdle)
 		SubmitCommandBuffer();
+#if BOOST_PLAT_ANDROID
+	// also runs while paused (no frames), so surface changes are applied and acknowledged promptly
+	SyncCanvasWindow(true);
+	SyncCanvasWindow(false);
+	// don't busy-spin a CPU core while the app is paused in the background
+	if (CafeSystem::IsTitlePaused())
+		std::this_thread::sleep_for(std::chrono::milliseconds(5));
+#endif
 }
 
 void VulkanBenchmarkPrintResults();

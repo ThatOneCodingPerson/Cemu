@@ -462,10 +462,10 @@ namespace CafeSystem
     bool sLaunchModeIsStandalone = false;
 	std::optional<std::vector<std::string>> s_overrideArgs;
 
-	bool sSystemRunning = false;
+	std::atomic_bool sSystemRunning = false;
 	TitleId sForegroundTitleId = 0;
 
-	bool sTitlePaused = false;
+	std::atomic_bool sTitlePaused = false; // written by the UI thread, read by the GPU thread
 
 	GameInfo2 sGameInfo_ForegroundTitle;
 
@@ -922,6 +922,12 @@ namespace CafeSystem
 		sTitlePaused = true;
 
 		coreinit::SuspendActiveThreads();
+		snd_core::AXOut_SetPaused(true);
+	}
+
+	bool IsTitlePaused()
+	{
+		return sTitlePaused;
 	}
 
 	void ResumeTitle()
@@ -933,6 +939,7 @@ namespace CafeSystem
 
 		sTitlePaused = false;
 
+		snd_core::AXOut_SetPaused(false);
 		coreinit::ResumeActiveThreads();
 	}
 

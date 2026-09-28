@@ -1008,8 +1008,19 @@ void LatteRenderTarget_itHLECopyColorBufferToScanBuffer(MPTR colorBufferPtr, uin
 		isDRCPrimary = !isDRCPrimary;
 	togglePressedLast = togglePressed;
 
-	bool showDRC = swkbd::hasKeyboardInputHook() == false && (isDRCPrimary ^ altScreenRequested);
 	const bool swapScreens = WindowSystem::GetWindowInfo().swap_screens;
+#if BOOST_PLAT_ANDROID
+	// "swap screens" is toggled from the UI thread, apply it here on the GPU thread which owns isDRCPrimary.
+	// Doing it on change (instead of in the setter) also keeps it when launching resets isDRCPrimary.
+	static bool s_swapScreensApplied = false;
+	if (swapScreens != s_swapScreensApplied)
+	{
+		isDRCPrimary = swapScreens;
+		s_swapScreensApplied = swapScreens;
+	}
+#endif
+
+	bool showDRC = swkbd::hasKeyboardInputHook() == false && (isDRCPrimary ^ altScreenRequested);
 
 	if (g_renderer->IsPadWindowActive())
 	{

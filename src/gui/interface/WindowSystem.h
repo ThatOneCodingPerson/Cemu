@@ -18,6 +18,23 @@ namespace WindowSystem
 		std::atomic<void*> surface = nullptr;
 	};
 
+#if BOOST_PLAT_ANDROID
+	// Window of an Android canvas (SurfaceView). The UI thread only publishes the current window here; the Latte
+	// (GPU) thread is the only one creating/destroying Vulkan surfaces and swapchains from it. Each change bumps
+	// generation, the Latte thread reports the generation it applied so the UI thread can wait (bounded) for it
+	// to stop using a window before Android destroys the surface.
+	struct AndroidCanvasInfo
+	{
+		std::mutex mutex;
+		std::condition_variable cv;
+		void* window = nullptr;				 // ANativeWindow*, holds one reference; guarded by mutex
+		std::atomic_uint64_t generation = 0; // incremented (under mutex) on every change of window
+		uint64 appliedGeneration = 0;		 // guarded by mutex, written by the Latte thread
+		bool consumerActive = false;		 // guarded by mutex, Latte thread is running and applying changes
+		bool consumerUsesWindow = false;	 // guarded by mutex, Latte thread holds a surface for this canvas
+	};
+#endif
+
 	enum struct PlatformKeyCodes : uint32
 	{
 		LCONTROL,
@@ -82,6 +99,16 @@ namespace WindowSystem
 		// canvas
 		WindowHandleInfo canvas_main;
 		WindowHandleInfo canvas_pad;
+
+#if BOOST_PLAT_ANDROID
+		AndroidCanvasInfo android_canvas_main;
+		AndroidCanvasInfo android_canvas_pad;
+
+		AndroidCanvasInfo& GetAndroidCanvas(bool mainCanvas)
+		{
+			return mainCanvas ? android_canvas_main : android_canvas_pad;
+		}
+#endif
 
 	  private:
 		std::mutex keycode_mutex;

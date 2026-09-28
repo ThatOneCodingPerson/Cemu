@@ -55,9 +55,15 @@ struct SwapchainInfoVk
 		return m_actualExtent;
 	}
 
+#if BOOST_PLAT_ANDROID
+	// only called on the Latte thread (see VulkanRenderer::SyncCanvasWindow), holds its own reference to window
+	SwapchainInfoVk(bool mainWindow, Vector2i size, ANativeWindow* window);
+	SwapchainInfoVk(SwapchainInfoVk&&) = delete;
+#else
 	SwapchainInfoVk(bool mainWindow, Vector2i size);
-	SwapchainInfoVk(const SwapchainInfoVk&) = delete;
 	SwapchainInfoVk(SwapchainInfoVk&&) noexcept = default;
+#endif
+	SwapchainInfoVk(const SwapchainInfoVk&) = delete;
 	~SwapchainInfoVk();
 
 	bool mainWindow{};
@@ -100,7 +106,7 @@ private:
 
 #if BOOST_PLAT_ANDROID
 	void RecreateSurface();
-	ANativeWindow* m_currentWindow = nullptr;
+	ANativeWindow* m_window = nullptr; // owned reference
 #endif
 
 	std::array<uint32, 2> m_swapchainQueueFamilyIndices;

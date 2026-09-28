@@ -390,6 +390,7 @@ namespace snd_core
 	void AXOut_init();
 	void AXOut_reset();
 	void AXOut_update();
+	void AXOut_SetPaused(bool paused);
 
 	COSModule* GetModuleSndCore1();
 	COSModule* GetModuleSndCore2();

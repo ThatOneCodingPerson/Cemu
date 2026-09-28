@@ -4,9 +4,11 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.hardware.display.DisplayManager
+import android.util.Log
 import android.view.Display
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -433,10 +435,10 @@ private fun EmulationSurfaces(
 
     val currentGamePadPosition = gamePadPosition ?: return
 
-    val padDisplay = if (activity != null) rememberPadDisplay(activity) else null
+    val padDisplayId = if (activity != null) rememberPadDisplayId(activity) else null
     val isPadVisibleEffective = sideMenuState.isPadVisible && isEmulationInitialized
     val usePadPresentation =
-        isPadVisibleEffective && sideMenuState.isPadOnExternalDisplay && padDisplay != null
+        isPadVisibleEffective && sideMenuState.isPadOnExternalDisplay && padDisplayId != null
 
     val mainTouchListener = remember { CanvasOnTouchListener() }
     val padTouchListener = remember { CanvasOnTouchListener() }
@@ -461,25 +463,37 @@ private fun EmulationSurfaces(
         )
     }
 
-    DisposableEffect(activity, padDisplay, usePadPresentation, sideMenuState.isExternalScreenRotatedLeft) {
+    // keyed on the display id: recreating the presentation destroys and recreates the pad surface
+    DisposableEffect(activity, padDisplayId, usePadPresentation, sideMenuState.isExternalScreenRotatedLeft) {
         val activityNonNull = activity ?: return@DisposableEffect onDispose {}
-        if (!usePadPresentation) {
+        if (!usePadPresentation || padDisplayId == null) {
             return@DisposableEffect onDispose {}
         }
-        val padDisplayNonNull = padDisplay
+        val displayManager =
+            activityNonNull.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+        val padDisplay = displayManager.getDisplay(padDisplayId)
+            ?: return@DisposableEffect onDispose {}
 
         NativeEmulation.setExternalScreenRotatedLeft(sideMenuState.isExternalScreenRotatedLeft)
 
         val padPresentation = PadPresentation(
             context = activityNonNull,
-            display = padDisplayNonNull,
+            display = padDisplay,
             rotateLeft = sideMenuState.isExternalScreenRotatedLeft,
             holderCallback = viewModel.padHolderCallback,
             touchListener = padPresentationTouchListener,
         )
 
-        padPresentation.show()
+        try {
+            padPresentation.show()
+        } catch (exception: WindowManager.InvalidDisplayException) {
+            // the display went away between picking it and showing the presentation; the display
+            // listener updates padDisplayId and this effect runs again
+            Log.w("Cemu", "Could not show the GamePad on display $padDisplayId", exception)
+            return@DisposableEffect onDispose {}
+        }
 
+        // dismissing again after Android auto-dismissed it (display removed) is harmless
         onDispose { padPresentation.dismiss() }
     }
 
@@ -586,18 +600,22 @@ private fun EmulationSurface(
 }
 
 @Composable
-private fun rememberPadDisplay(activity: Activity): Display? {
+private fun rememberPadDisplayId(activity: Activity): Int? {
     val displayManager =
         remember(activity) { activity.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager }
-    var padDisplay by remember { mutableStateOf<Display?>(null) }
+    var padDisplayId by remember { mutableStateOf<Int?>(null) }
 
     fun updatePadDisplay() {
-        padDisplay =
+        val padDisplay =
             if (activity.display.displayId == Display.DEFAULT_DISPLAY) {
                 DisplayUtils.getExternalDisplay(activity)
             } else {
                 DisplayUtils.getInternalDisplay(activity)
             }
+        // onDisplayChanged fires for brightness, refresh rate or state changes and returns new
+        // Display objects each time. Only a different display (or none) may change the state,
+        // otherwise the pad presentation and its surface would be recreated constantly.
+        padDisplayId = padDisplay?.displayId
     }
 
     DisposableEffect(displayManager, activity) {
@@ -612,7 +630,7 @@ private fun rememberPadDisplay(activity: Activity): Display? {
         onDispose { displayManager.unregisterDisplayListener(listener) }
     }
 
-    return padDisplay
+    return padDisplayId
 }
 
 @Composable
