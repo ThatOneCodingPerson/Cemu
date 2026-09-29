@@ -122,7 +122,7 @@ Status: **first pass done** (2026-09-28). Every section is filled; the `?` cells
 - Feasible only as a fork feature.
 - **Minimum state:** all guest RAM regions, PPC thread contexts plus the scheduler, the HLE module state, IOSU state including open file handles, GPU state, audio state, and timers.
 - **GPU state options:** either flush and rebuild the GPU caches on load, or serialize texture and buffer caches.
-- **Start by contacting issue #2062's author and diffing their code against PR #953.**
+- **Superseded by §10 (2026-09-29):** the full feasibility study, the prior art and a plan.
 - **Risks:**
   - Save files corrupted by a state restored mid-write.
   - State files that are invalid across builds (version them).
@@ -284,6 +284,115 @@ Ours (76ac98f1) follows the same approach with one session.
 - **The problem:** we report frame intervals, so a 30 fps title measured against 16.7 ms always looked late and kept clocks high.
 - **The fix:** the target is now `16.67 ms × GX2SetSwapInterval` (1–4; 0 = vsync off counts as 1), and reports are capped at 4× the target.
 - **Limitation:** a title that paces itself to 30 fps but leaves the swap interval at 1 still gets the 60 fps target.
+
+## 10. Save states: feasibility (session 4, 2026-09-29)
+The owner asked for a write-up first; no code. This section replaces the "start by contacting issue #2062's author" note in §3.
+
+**Sources** (GitHub API and raw files, read 2026-09-29):
+- cemu-project/Cemu PR #953 (Spegs21): `pulls/953` and `pulls/953/files`.
+- Issue #2062 and its comments.
+- The branch it links, github.com/Matt-Wood-23/Cemu/tree/savestates, including:
+  - The compare against Cemu main: 8 commits, 47 files, ~4.6k added lines.
+  - Its five docs under `docs/save-states-*.md`.
+  - `src/Cafe/SaveState/*`.
+- Our core, for the drift numbers below.
+
+### Prior art
+| | PR #953 (Spegs21) | Matt-Wood-23 `savestates` (issue #2062) |
+|---|---|---|
+| State | Draft, opened 2023-08, last update 2025-04 | Branch last pushed 2026-09-15, based on Cemu main `3310f3b8` (2026-09-10) |
+| Size | 99 files, +2015 lines; a `save(writer)`/`restore(reader)` pair added to almost every module | 47 files, ~4.6k lines, of which ~2.5k are core C++ (the rest is docs, Python probes and the wx menu) |
+| Approach | Suspend threads, dump RAM and a few module tables; no GPU or fiber handling | Quiesce at the scheduler boundary; RAM dump plus rebuilt host state; GPU cache drop; details below |
+| Verified | Nothing reported working | Monster Hunter 3 Ultimate on Windows x64: save, walk to another area, load; the restored world keeps running and makes further area transitions, with audio, no crash log |
+| License | MPL-2.0 (Cemu) | MPL-2.0 (fork of Cemu, the repo's license field says so) |
+| Upstream | Stalled | Closed "not planned" within 20 minutes: Cemu doesn't accept AI-written contributions (CONTRIBUTING.md). A technical rejection was not the reason |
+
+**PR #953 is superseded.** It serializes host tables without a world-stop and leaves the GPU and fibers to chance.
+
+The Matt-Wood-23 design is the one to build on. It was found by measuring, and its docs are frank about what failed.
+
+### How the Matt-Wood-23 design works
+1. **Quiesce (`SaveState/Quiesce.cpp`):** each scheduler core parks in its idle loop right after `__OSStoreThread()`, so every guest thread's registers are already in guest RAM.
+   - Busy cores are routed through the idle loop while a request is pending.
+   - The Latte thread also parks at a command-packet boundary (`LatteCP_readU32Deprc`'s idle path).
+   - There is a 2 s timeout: the save fails rather than deadlocking.
+2. **Chunked stream (`StateStream`, symmetric read/write, a marker per chunk):**
+   - `MEMR`: every mapped MMU range, about 286 MiB for MH3U.
+   - `CPUS`: per-core state, plus the new `hleEntryStackPointer` per thread.
+   - `TIME`: the PPCTimer counters.
+   - `ALRM`: host alarms, via a callback-ID registry.
+   - `SNDV`: AX voice lists.
+   - `GX2S`/`LATT`: GPU registers and cursors.
+   - `FSAH`: open IOSU file handles, reopened at the same slot and check value. Create/truncate flags are stripped; directory iterators are skipped.
+   - The container is zstd-compressed, with an uncompressed header (thumbnail, fingerprint), 10 slots plus undo.
+3. **Load:**
+   - The state is read, decompressed and fingerprint-checked before the world stops.
+   - Then RAM is replaced, and every guest-address-keyed GPU cache is dropped on the Latte thread.
+   - Host fibers are rebuilt from the restored thread list.
+   - Threads blocked inside an HLE call are restarted at their HLE entry stack pointer. That needs a hook in the interpreter, `BackendX64` and `BackendAArch64`. The recompilers bypass `PPCInterpreter_virtualHLE`.
+4. **Fingerprint:** build version, title id and version, multicore mode. Their next step: hash the HLE call table (names in registration order), because dev builds share a git hash.
+
+**The lesson that applies to us too:** in an HLE emulator a RAM snapshot is necessary but not sufficient. Every failure they hit was host state describing guest objects:
+- fibers
+- the Latte thread reading guest memory mid-restore
+- AX voice vectors (an endless mixer loop)
+- the FSA handle table (streamed music stopped)
+
+### Still open in that branch (their §8 "known-unfixed")
+1. `FSClient` allows 1 command in flight, so a load taken with a command in flight can wedge file I/O. Seen in source, not yet triggered.
+2. IOSU host threads (`FSAIoThread`, nn service threads) are not parked by the quiesce, so they can write guest memory during the restore.
+3. `__depr__IOS_Ioctlv` (MCP, act, acp, nim) blocks by self-suspend, which the restart helper doesn't see.
+4. `OSWaitCond`/`OSFastCond_Wait` keep `prevLockCount` on the host stack.
+5. `nlibcurl.curl_easy_perform` runs a detached host worker that holds fiber-stack pointers, so a load can cause a use-after-free.
+
+Also: a chunk-layout mismatch is found only after `MEMR` has overwritten memory. Chunk compatibility should be validated from the header first. And only one title was tested.
+
+### Fit with our fork
+- **Drift is small.** Our core last merged Cemu main on 2026-04-19; their base is 2026-09-10. For the files the branch touches, the differences between our HEAD and their base:
+
+  | File | Lines that differ |
+  |---|---|
+  | `coreinit_Alarm`, `ax_voice`, `ax_ist`, `iosu_fsa`, `PPCScheduler`, `PPCInterpreterHLE`, `PPCState.h` | 0 |
+  | `TCL.cpp` | 3 |
+  | `BackendAArch64.cpp` | 11 |
+  | `PPCTimer.cpp` | 12 |
+  | `coreinit_Thread.cpp` | 47 |
+  | `LatteThread.cpp` | 49 |
+  | `ax_mix.cpp` | 88 |
+  | `LatteCommandProcessor.cpp` | 269 |
+
+  Most of those differences are our own Android changes (cntfrq timer, ADPF thread registration, the precompile mode, the Latte guard). A port is a merge exercise, not a rewrite.
+- **Platform:** the core part is platform-neutral. zstd is already a dependency (`vcpkg.json`, linked by CemuCafe). Only their wx menu and probe scripts are Windows-specific.
+- **AArch64:** they already hook `BackendAArch64.cpp`. Android runs the AArch64 recompiler, so the HLE-entry stack-pointer capture works, but it has never run on ARM.
+- **Android-specific residue to check when porting:**
+  - Our `PauseTitle` (threads suspended, AX output paused), so saving while paused must still quiesce.
+  - `SyncCanvasWindow` runs in the same idle path as their GPU hook.
+  - SAF-backed files (`fscDeviceAndroidSAF`): `FSAH` reopens by FSC path, which goes through the SAF device again.
+  - Amiibo/NFC state.
+  - `NativeSwkbd` text.
+- **Memory:** the capture holds `MEMR` in RAM (~290 MiB for MH3U, up to ~1 GiB in theory), and their undo keeps another copy in RAM. On 6–8 GB phones that invites the low-memory killer. On Android, undo should go to a file, and compression should stream.
+- **Storage:** 100–400 MB per state after zstd. Store under `<data root>/savestates/<titleid>/`. Never mirror states through the SAF save sync (too big, and not real saves).
+- **Build lock:** every APK update invalidates states until the fingerprint hashes the HLE table. Users must be told, or a state should be refused with a clear message (it already is, by fingerprint).
+- **Upstream:** Cemu won't take AI-written code, and this fork is AI-assisted too. Save states stay fork-only whatever we do. Keep them behind an "experimental" setting.
+
+### Plan if the owner wants it built
+| Step | Contents | Estimate |
+|---|---|---|
+| A. Port | Bring `src/Cafe/SaveState/*` and the hooks (scheduler, alarms, AX, FSA, TCL, Latte, PPCTimer, the three HLE dispatch paths) onto our tree. Resolve the coreinit_Thread/Latte hunks against our Android changes. Header-first chunk validation; fingerprint with an HLE-table hash; undo to a file | 1 session |
+| B. Android UI | Setting "Save states (experimental)", off by default. In-game menu: save/load slot 1–3 with thumbnail and time, undo last load. Hotkeys (append-only `HotkeyAction` values). JNI calls run on a worker thread, never the UI thread (the quiesce blocks up to 2 s) | 1 session |
+| C. Device iteration | The owner tests MH3U (the known-good title), then e.g. Mario Kart 8, BotW, Splatoon (offline). Fix what the log shows; start with known-unfixed items 1, 2 and 5 | 1–3 sessions, driven by the owner's logs |
+
+**Success criteria for an experimental release:** save, then load in the same session, and play on for 5 minutes, on 3 titles; no crash; states refused (not corrupted) after an APK update.
+
+### Recommendation
+Feasible as an experimental, fork-only feature by porting the Matt-Wood-23 branch (MPL-2.0, keep its file headers and credit it in the commit message), not PR #953.
+
+The hard parts are already solved: the quiesce, fiber rebuild, HLE restart, AX and FSA state. What's left is breadth: more titles, the five known-unfixed hazards, and the GPU render targets. Those only show up by testing on devices.
+
+**Decision needed from the owner:** start step A next session (yes/no). If yes, the owner should also name 2–3 games they want it for, and confirm that the known limits are acceptable:
+- states are tied to one APK build;
+- loading an old state after an in-game save can confuse the game;
+- online sessions drop.
 
 ## Gap table
 Only facts verified from the sources above are marked. `✓` = has it, `–` = verified absent, `?` = not verified yet, `partial` = see notes.

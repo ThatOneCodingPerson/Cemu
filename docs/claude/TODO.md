@@ -15,7 +15,7 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 - **Testing (owner, 2026-09-29):** the owner installs and tests the APKs themselves. No adb from Claude: build without `-Install`, hand over `dist/android/output/Cemu-latest-dev.apk` plus the device test list, and mark items `[?]`.
 - **Session 4 (2026-09-29), working order** (the owner reprioritized: save states and graphics options first, the second screen last):
   1. [x] Commit the pending work: shader compile per game (706e1979), adaptive ADPF target (dbf60105).
-  2. [ ] Save states: feasibility write-up (#9, FEATURE_RESEARCH §10). The owner chose "write-up only" for now.
+  2. [x] Save states: feasibility write-up (#9, FEATURE_RESEARCH §10) (2026-09-29). **Owner decision needed:** port the Matt-Wood-23 branch as an experimental feature (yes/no, which games).
   3. [ ] Graphics options (new, see "Graphics options" below): research, pre-rotation (P1), gamma, anisotropic filtering, a sharpening upscale filter, graphic packs per game.
   4. [ ] Per-game overlay layouts (#5).
   5. [ ] Per vendor:product controller profiles (#2).
@@ -324,7 +324,7 @@ The owner asked for "graphical settings that can help improvements for games eit
      - Menu > Scan amiibo > Import file > pick a .bin: "Scanned <name>" and the game reacts.
      - Scanning again from the list works; importing the same file again doesn't create a duplicate.
      - Delete works. A non-amiibo file gives "Not a valid amiibo or NFC file".
-9. [ ] Save states: experimental, fork-only; start from Cemu issue #2062 and PR #953
+9. [!] Save states: experimental, fork-only. Feasibility done (FEATURE_RESEARCH §10, 2026-09-29): feasible by porting github.com/Matt-Wood-23/Cemu/tree/savestates (MPL-2.0; MH3U verified on x64). Plan: A port (1 session), B Android UI (1 session), C device iteration (1–3 sessions). Blocked on the owner's go-ahead and choice of test games.
 10. [~] Vulkan pre-rotation (P1) and an adaptive ADPF target (session 4; see Phase 6 and "Graphics options"). ADPF target: dbf60105.
 
 ## Housekeeping
