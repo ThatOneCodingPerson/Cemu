@@ -57,7 +57,36 @@ Format: date · what was done · what's next · open questions. Keep each entry 
 - Edit CRLF files with the Edit tool or the `$TEMP/crlfedit.py` helper; a backslash-n escape inside Python heredocs turns into a real newline, so use the Edit tool for any string containing escapes.
 - Don't edit native sources while a build is compiling.
 
-**Next:**
-- The owner enables USB debugging on the Thor; install, check B1, and run the Phase 1 device tests.
-- Phase 2, per `PHASE2_DESIGN.md` (research Azahar PR #2425 first).
-- Continue Phase 7 research (partially written in FEATURE_RESEARCH.md: driver fetcher, auto-map, save states, dual screen).
+**Next (superseded, see below):** Phase 2 onwards.
+
+**Later the same session (Phases 2–7):**
+
+*Commits:*
+- `f333fe7a`: Phase 2, surface lifecycle.
+- `91f156d3` and `eae0b51f`: Phase 3, JNI, storage and crash fixes.
+- `ea67dfae`: Phase 4, input.
+- `76ac98f1`: pad present mode, `cntfrq` timer, ADPF, BotW guard.
+- `fe594253`: dual-screen UX, single-screen cleanup, arm64-only APK.
+- Docs: `654c7ef6`, `71c540da`.
+
+*Research findings:*
+- Azahar PR #2425 confirmed the surface design lessons: dedupe `surfaceChanged`, one VkSurface per window.
+- NDK headers confirmed: `fromSurface` returns +1; ADPF core API is 33, `setThreads` 34.
+- Eden `adpf.cpp` was read for design only (GPL-3.0, no code copied).
+- Eden `DriverFetcherFragment` gave the repo list and recommendation table.
+- Azahar PR #1769 covers auto-map; Azahar #1371/#1385 cover the secondary display.
+
+*Status and blockers:*
+- About 60 BUGS entries are fixed. Everything is `[?]` until the owner tests on a device.
+- **Blocked on the owner:**
+  1. USB debugging on the Thor (still MTP only).
+  2. The D1/D2 design decision (SAF save sync on the main thread; options are in TODO Phase 3).
+- **Tooling notes:**
+  - WebSearch hit a session limit late in the session; GitHub raw/API via curl still worked.
+  - The auto-mode command classifier failed transiently several times; file edits via the Edit tool were unaffected.
+
+*Next:*
+- Owner device tests: pull logs with `dist/android/pull-logs.ps1`, fix regressions first.
+- D1/D2 once decided.
+- SAF path encoding (Phase 3).
+- Then the feature backlog, starting with the GPU driver fetcher (FEATURE_RESEARCH.md §1).

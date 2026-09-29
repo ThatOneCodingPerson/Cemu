@@ -13,7 +13,11 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 
 ## Current focus
 - **Phase 1 is built and awaiting the owner's device test.** APK: `dist/android/output/Cemu-0.5.1-92ecc623-dev.apk`.
-- Phases 1–4 are built and awaiting device tests (latest APK `dist/android/output/Cemu-latest-dev.apk`). Next: Phase 5 (dual screen), Phase 6 (performance), Phase 7 (research write-up).
+- Phases 1–6 are built and awaiting device tests (latest APK `dist/android/output/Cemu-latest-dev.apk`). Phase 7 research first pass is done.
+- Next:
+  - Owner device tests and logs.
+  - D1/D2 decision (SAF save sync design).
+  - Then the feature backlog, starting with the GPU driver fetcher.
 - **Blocker for the adb workflow:** the Thor has no USB debugging yet. As of 2026-09-28 it enumerates as MTP only (USB PID 4EE1) and `adb devices` is empty. The owner was asked to enable it.
 
 ---
@@ -123,9 +127,9 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 - [x] Research: Azahar's secondary-display PRs #617, #1371 and #1385; the owner's own Azahar PR #1341; melonDS; Thor specs (FEATURE_RESEARCH.md §4)
 - [ ] `adb shell dumpsys display` on the Thor, to confirm how the bottom panel is exposed (needs USB debugging)
 - [?] Pad swapchain presents non-blocking (MAILBOX/IMMEDIATE) and never drives host vsync (P8), 76ac98f1
-- [~] Per-display pad DPI: `setPadDPI` from `PadPresentation`, reset when the pad returns to the main display (P10). Written, **not built yet** (the tool check failed; build before committing)
-- [~] Swap screens persisted; a one-time "Second screen detected: show GamePad there" snackbar. Written, **not built yet**
-- [~] Single-screen devices: "External PAD screen" and "Rotate external screen left" are hidden without a second display. Written, **not built yet**
+- [?] Per-display pad DPI: `setPadDPI` from `PadPresentation`, reset when the pad returns to the main display (P10), fe594253
+- [?] Swap screens persisted; a one-time "Second screen detected: show GamePad there" snackbar, fe594253
+- [?] Single-screen devices: "External PAD screen" and "Rotate external screen left" are hidden without a second display, fe594253
 - [ ] Split ratio setting for the inline pad (instead of a fixed 50/50); display picker when there are 2+ candidates
 - **Device test:**
   - Thor: 120 Hz main screen not throttled when the pad is on the bottom screen (overlay FPS).
@@ -166,4 +170,5 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 ## Housekeeping
 - [x] Deleted the stray `%TEMP%\k.txt` left by a planning agent (2026-09-28)
 - [x] B4 `vcpkg.json` duplicate hidapi (95337964)
-- [ ] B5 dead `ENABLE_NSYSHID_LIBUSB` flag; B6 APK ships 32-bit/x86 libs from androidx (add `ndk.abiFilters`)
+- [x] B6 APK only packages arm64-v8a (fe594253)
+- [ ] B5 dead `ENABLE_NSYSHID_LIBUSB` flag

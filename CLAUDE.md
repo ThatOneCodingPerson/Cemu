@@ -93,7 +93,8 @@
 
 ## Invariants and hazards (keep this list current)
 - **Surfaces:**
-  - Target design (Phase 2, `docs/claude/PHASE2_DESIGN.md`): only the Latte thread creates or destroys swapchains and VkSurfaces. The UI thread publishes `{window, generation}` and never waits on the GPU thread without a timeout.
+  - Implemented in f333fe7a (`docs/claude/PHASE2_DESIGN.md`): only the Latte thread creates or destroys swapchains and VkSurfaces, via `VulkanRenderer::SyncCanvasWindow`. JNI `setSurface`/`clearSurface` publish `{window, generation}` in `WindowSystem::AndroidCanvasInfo`, and the UI thread waits at most 500 ms for the ack. Don't reintroduce UI-thread swapchain access.
+  - The GamePad swapchain presents non-blocking (MAILBOX/IMMEDIATE) so a 60 Hz second screen can't throttle the TV.
   - One VkSurface per ANativeWindow at a time.
   - `ANativeWindow_fromSurface` returns +1; release exactly once.
 - **JNI:**
@@ -101,6 +102,8 @@
   - Never let C++ exceptions escape a JNI function; wrap in `JNIUtils::HandleNativeException`.
   - `FindClass` only works on Java threads, so cache classes during init.
   - Native-called Kotlin methods need `@Keep` (R8 shrinks release/dev).
+  - Calls from native code (especially PPC fiber threads) go through `JNIUtils::FiberSafeJNICall`, which runs on a pool of 4 persistent attached workers. Always follow them with `JNIUtils::CheckAndClearException`.
+  - Strings convert via UTF-16 (`FromJString`/`ToJString`); never `NewStringUTF`/`GetStringUTFChars`, which use modified UTF-8.
 - **Main thread:** no disk, SAF or network I/O, and no `runBlocking` on I/O. It must never block on the GPU thread without a timeout.
 - **Quit:** `exit()` runs static destructors while the GPU thread lives, which crashes. Use the native quit path (`_exit` after flushing).
 - **Dual screen:**

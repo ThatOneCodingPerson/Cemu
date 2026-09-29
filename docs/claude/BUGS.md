@@ -108,7 +108,7 @@ When you fix an entry, update its status here and tick the matching item in TODO
 | B3 | L | `.gitattributes` | `text=auto eol=lf` had no pattern, so `gradlew` and `*.sh` were CRLF. Targeted rules added | fixed 95337964 |
 | B4 | L | `vcpkg.json` | `hidapi` is listed unconditionally as well as `!android`, so it's built for Android anyway | fixed 95337964 |
 | B5 | L | Gradle `-DENABLE_NSYSHID_LIBUSB=OFF` | Referenced by no CMake file (libusb is still required) | open |
-| B6 | L | APK packaging | androidx dependencies ship `armeabi-v7a`/`x86` native libs, so the APK looks installable on 32-bit/x86 devices where `libCemuAndroid.so` is missing. Add `ndk { abiFilters += "arm64-v8a" }` to defaultConfig | open |
+| B6 | L | APK packaging | androidx dependencies ship `armeabi-v7a`/`x86` native libs, so the APK looks installable on 32-bit/x86 devices where `libCemuAndroid.so` is missing. Add `ndk { abiFilters += "arm64-v8a" }` to defaultConfig | fixed fe594253 |
 
 ## P: performance (not crashes)
 | ID | Where | Item | Status |
@@ -122,4 +122,4 @@ When you fix an entry, update its status here and tick the matching item in TODO
 | P7 | `util/SystemInfo/SystemInfoLinux.cpp:27` | `/proc/stat` is blocked by SELinux, so the overlay's CPU% reads 0 | wontfix: only the per-core breakdown reads /proc/stat; overall CPU% uses times() and works; per-core isn't exposed in the Android UI |
 | P8 | `VulkanRenderer.cpp:3037-3039` | One vsync setting drives both swapchains. A FIFO pad chain at 60 Hz can throttle the 120 Hz main chain on Thor | fixed 76ac98f1 |
 | P9 | `VulkanPipelineCompiler.cpp:1147-1160` | min(8, cores−1) compile threads at normal priority compete with the PPC and GPU threads | open |
-| P10 | `NativeEmulation.cpp:255-259` | `setDPI` gives both canvases the main display's density | open |
+| P10 | `NativeEmulation.cpp:255-259` | `setDPI` gives both canvases the main display's density | fixed fe594253 |
