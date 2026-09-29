@@ -9,31 +9,37 @@ import android.util.Log
 import androidx.annotation.Keep
 import androidx.core.net.toUri
 
-private const val PATH_SEPARATOR_ENCODED = "%2F"
-private const val PATH_SEPARATOR_DECODED = "/"
-private const val COLON_ENCODED = "%3A"
 private const val MODE = "r"
 
+/** The path native code uses for this SAF document, see SafDocumentPath. Other URIs are passed as they are. */
 fun Uri.toNativePath(): String {
-    val uriPath = toString()
-    val delimiterPos = uriPath.lastIndexOf(COLON_ENCODED)
-    if (delimiterPos == -1) {
-        return uriPath
+    val authority = authority ?: return toString()
+    val treeId = if (DocumentsContract.isTreeUri(this)) DocumentsContract.getTreeDocumentId(this) else null
+    val documentId = try {
+        DocumentsContract.getDocumentId(this)
+    } catch (_: IllegalArgumentException) {
+        null // the tree URI itself
     }
-    return uriPath.take(delimiterPos) + uriPath.substring(delimiterPos).replace(
-        PATH_SEPARATOR_ENCODED, PATH_SEPARATOR_DECODED
-    )
+    if (treeId == null && documentId == null) {
+        return toString()
+    }
+    return formatSafDocumentPath(SafDocumentPath(authority, treeId, documentId))
 }
 
 fun String.fromNativePath(): Uri {
-    val delimiterPos = lastIndexOf(COLON_ENCODED)
-    if (delimiterPos == -1) {
-        return toUri()
-    }
+    val document = parseSafDocumentPath(this) ?: return toUri()
+    val treeId = document.treeId
+    val documentId = document.documentId
+    return when {
+        treeId != null && documentId != null -> DocumentsContract.buildDocumentUriUsingTree(
+            DocumentsContract.buildTreeDocumentUri(document.authority, treeId),
+            documentId,
+        )
 
-    return (substring(0, delimiterPos) + substring(delimiterPos).replace(
-        PATH_SEPARATOR_DECODED, PATH_SEPARATOR_ENCODED
-    )).toUri()
+        treeId != null -> DocumentsContract.buildTreeDocumentUri(document.authority, treeId)
+        documentId != null -> DocumentsContract.buildDocumentUri(document.authority, documentId)
+        else -> toUri()
+    }
 }
 
 object NativeFiles {
@@ -76,6 +82,8 @@ object NativeFiles {
                 directoryUri,
                 DocumentsContract.getDocumentId(directoryUri)
             )
+            val authority = directoryUri.authority!!
+            val treeId = DocumentsContract.getTreeDocumentId(directoryUri)
             contentResolver.query(
                 childrenUri,
                 arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID),
@@ -84,10 +92,8 @@ object NativeFiles {
                 null
             ).use { cursor ->
                 while (cursor != null && cursor.moveToNext()) {
-                    val documentId = cursor.getString(0)
-                    val documentUri =
-                        DocumentsContract.buildDocumentUriUsingTree(directoryUri, documentId)
-                    files.add(documentUri.toNativePath())
+                    val documentId = cursor.getString(0) ?: continue
+                    files.add(formatSafDocumentPath(SafDocumentPath(authority, treeId, documentId)))
                 }
             }
         } catch (e: Exception) {
