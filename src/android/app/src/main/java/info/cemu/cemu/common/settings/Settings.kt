@@ -18,6 +18,9 @@ data class EmulationSettings(
     val isPadVisible: Boolean = false,
     val isPadOnExternalDisplay: Boolean = false,
     val isExternalScreenRotatedLeft: Boolean = false,
+    val areScreensSwapped: Boolean = false,
+    // whether the user was already offered to show the GamePad on a detected second display
+    val wasSecondDisplayOffered: Boolean = false,
 )
 
 @Serializable

@@ -465,6 +465,13 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_resumeTitle([[maybe_unused]]
 	CafeSystem::ResumeTitle();
 }
 
+// the GamePad may be shown on another display with a different density (e.g. the AYN Thor's bottom screen)
+extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeEmulation_setPadDPI([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jfloat dpi)
+{
+	WindowSystem::GetWindowInfo().pad_dpi_scale = dpi;
+}
+
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeEmulation_quitProcess([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
 {

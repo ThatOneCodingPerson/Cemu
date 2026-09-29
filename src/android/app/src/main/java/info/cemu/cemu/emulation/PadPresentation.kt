@@ -8,6 +8,7 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.ViewGroup
 import android.view.WindowManager
+import info.cemu.cemu.nativeinterface.NativeEmulation
 
 class PadPresentation(
     context: Context,
@@ -18,6 +19,9 @@ class PadPresentation(
 ) : Presentation(context, display) {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // UI scale of the GamePad overlay (notifications etc.) must follow this display's density
+        NativeEmulation.setPadDPI(context.resources.displayMetrics.density)
 
         window?.addFlags(
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or

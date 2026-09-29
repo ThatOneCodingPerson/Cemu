@@ -51,6 +51,11 @@ android {
         versionName = getVersionName()
         versionCode = 51
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // the emulator library is only built for arm64; don't ship other ABIs' libraries from dependencies
+        // (the APK would look installable on devices where it can't run)
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
     }
 
     androidResources {

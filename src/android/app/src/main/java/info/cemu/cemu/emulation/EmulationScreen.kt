@@ -35,8 +35,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -104,6 +106,26 @@ fun EmulationScreen(
     val isInputOverlayVisible by viewModel.isInputOverlayVisible.collectAsState()
     val inputOverlaySettings by viewModel.inputOverlaySettings.collectAsState()
 
+    // second display (dual-screen handheld like the AYN Thor, or an external monitor) for the GamePad, null if none
+    val activity = LocalContext.current as? Activity
+    val padDisplayId = if (activity != null) rememberPadDisplayId(activity) else null
+
+    LaunchedEffect(padDisplayId, isEmulationInitialized) {
+        if (padDisplayId == null || !isEmulationInitialized || !viewModel.shouldOfferSecondDisplay()) {
+            return@LaunchedEffect
+        }
+        viewModel.onSecondDisplayOffered()
+        val result = snackbarHostState.showSnackbar(
+            message = tr("Second screen detected"),
+            actionLabel = tr("Show GamePad there"),
+            duration = SnackbarDuration.Long,
+        )
+        if (result == SnackbarResult.ActionPerformed) {
+            viewModel.updateSideMenuState(
+                viewModel.sideMenuState.value.copy(isPadVisible = true, isPadOnExternalDisplay = true)
+            )
+        }
+    }
 
     fun closeDrawer() {
         scope.launch {
@@ -166,6 +188,7 @@ fun EmulationScreen(
                 ) {
                     EmulationSideMenuContent(
                         sideMenuState = sideMenuState,
+                        hasSecondDisplay = padDisplayId != null,
                         updateState = {
                             viewModel.updateSideMenuState(it)
                             setMotionSensorEnabled(it.isMotionEnabled)
@@ -201,6 +224,7 @@ fun EmulationScreen(
             viewModel = viewModel,
             isEmulationInitialized = isEmulationInitialized,
             gameSurfaceViews = gameSurfaceViews,
+            padDisplayId = padDisplayId,
         )
 
         InputOverlaySurface(
@@ -304,6 +328,7 @@ private fun EditInputsLayout(
 @Composable
 private fun EmulationSideMenuContent(
     sideMenuState: SideMenuState,
+    hasSecondDisplay: Boolean,
     updateState: (SideMenuState) -> Unit,
     onShowEmulatedUSBDevices: () -> Unit,
     onEditInputOverlay: () -> Unit,
@@ -328,12 +353,15 @@ private fun EmulationSideMenuContent(
         onCheckedChange = { updateState(sideMenuState.copy(isPadVisible = it)) },
     )
 
-    CheckboxItem(
-        label = tr("External PAD screen"),
-        checked = sideMenuState.isPadOnExternalDisplay,
-        onCheckedChange = { updateState(sideMenuState.copy(isPadOnExternalDisplay = it)) },
-        enabled = sideMenuState.isPadVisible,
-    )
+    // only meaningful with a second display; single screen devices show the pad next to the TV
+    if (hasSecondDisplay) {
+        CheckboxItem(
+            label = tr("External PAD screen"),
+            checked = sideMenuState.isPadOnExternalDisplay,
+            onCheckedChange = { updateState(sideMenuState.copy(isPadOnExternalDisplay = it)) },
+            enabled = sideMenuState.isPadVisible,
+        )
+    }
 
     CheckboxItem(
         label = tr("Swap screens"),
@@ -341,12 +369,14 @@ private fun EmulationSideMenuContent(
         onCheckedChange = { updateState(sideMenuState.copy(areScreensSwapped = it)) },
     )
 
-    CheckboxItem(
-        label = tr("Rotate external screen left"),
-        checked = sideMenuState.isExternalScreenRotatedLeft,
-        onCheckedChange = { updateState(sideMenuState.copy(isExternalScreenRotatedLeft = it)) },
-        enabled = sideMenuState.isPadOnExternalDisplay,
-    )
+    if (hasSecondDisplay) {
+        CheckboxItem(
+            label = tr("Rotate external screen left"),
+            checked = sideMenuState.isExternalScreenRotatedLeft,
+            onCheckedChange = { updateState(sideMenuState.copy(isExternalScreenRotatedLeft = it)) },
+            enabled = sideMenuState.isPadOnExternalDisplay,
+        )
+    }
 
     TextButtonItem(
         label = tr("Emulated USB Devices"),
@@ -432,6 +462,7 @@ private fun EmulationSurfaces(
     viewModel: EmulationViewModel,
     isEmulationInitialized: Boolean,
     gameSurfaceViews: MutableList<View>,
+    padDisplayId: Int?,
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
@@ -442,7 +473,6 @@ private fun EmulationSurfaces(
 
     val currentGamePadPosition = gamePadPosition ?: return
 
-    val padDisplayId = if (activity != null) rememberPadDisplayId(activity) else null
     val isPadVisibleEffective = sideMenuState.isPadVisible && isEmulationInitialized
     val usePadPresentation =
         isPadVisibleEffective && sideMenuState.isPadOnExternalDisplay && padDisplayId != null
@@ -501,7 +531,11 @@ private fun EmulationSurfaces(
         }
 
         // dismissing again after Android auto-dismissed it (display removed) is harmless
-        onDispose { padPresentation.dismiss() }
+        onDispose {
+            padPresentation.dismiss()
+            // the pad is shown on the main display again
+            NativeEmulation.setPadDPI(activityNonNull.resources.displayMetrics.density)
+        }
     }
 
     LinearLayout(currentGamePadPosition) { itemModifier ->

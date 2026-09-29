@@ -81,6 +81,9 @@ class EmulationViewModel(
                 false,
             )
 
+    // until the settings are loaded, don't offer
+    private var wasSecondDisplayOffered = true
+
     init {
         viewModelScope.launch {
             val settings = dataStore.data.first()
@@ -89,8 +92,25 @@ class EmulationViewModel(
                     isPadVisible = settings.emulationSettings.isPadVisible,
                     isPadOnExternalDisplay = settings.emulationSettings.isPadOnExternalDisplay,
                     isExternalScreenRotatedLeft = settings.emulationSettings.isExternalScreenRotatedLeft,
+                    areScreensSwapped = settings.emulationSettings.areScreensSwapped,
                     isInputOverlayVisible = settings.inputOverlaySettings.isOverlayEnabled,
                 )
+            }
+            wasSecondDisplayOffered = settings.emulationSettings.wasSecondDisplayOffered
+        }
+    }
+
+    /** True once per install: the user should be offered to show the GamePad on a detected second display. */
+    fun shouldOfferSecondDisplay(): Boolean {
+        val state = _sideMenuState.value
+        return !wasSecondDisplayOffered && !(state.isPadVisible && state.isPadOnExternalDisplay)
+    }
+
+    fun onSecondDisplayOffered() {
+        wasSecondDisplayOffered = true
+        viewModelScope.launch {
+            dataStore.updateData {
+                it.copy(emulationSettings = it.emulationSettings.copy(wasSecondDisplayOffered = true))
             }
         }
     }
@@ -129,7 +149,8 @@ class EmulationViewModel(
 
         if (oldState.isPadVisible != sideMenuState.isPadVisible ||
             oldState.isPadOnExternalDisplay != sideMenuState.isPadOnExternalDisplay ||
-            oldState.isExternalScreenRotatedLeft != sideMenuState.isExternalScreenRotatedLeft
+            oldState.isExternalScreenRotatedLeft != sideMenuState.isExternalScreenRotatedLeft ||
+            oldState.areScreensSwapped != sideMenuState.areScreensSwapped
         ) {
             viewModelScope.launch {
                 dataStore.updateData {
@@ -138,6 +159,7 @@ class EmulationViewModel(
                             isPadVisible = sideMenuState.isPadVisible,
                             isPadOnExternalDisplay = sideMenuState.isPadOnExternalDisplay,
                             isExternalScreenRotatedLeft = sideMenuState.isExternalScreenRotatedLeft,
+                            areScreensSwapped = sideMenuState.areScreensSwapped,
                         )
                     )
                 }

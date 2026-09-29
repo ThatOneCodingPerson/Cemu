@@ -9,6 +9,10 @@ object NativeEmulation {
     @JvmStatic
     external fun setDPI(dpi: Float)
 
+    /** Overrides the GamePad DPI when it is shown on another display (setDPI sets both). */
+    @JvmStatic
+    external fun setPadDPI(dpi: Float)
+
 
     /**
      * Publishes the surface of a canvas; the GPU thread creates the swapchain for it. Call from
