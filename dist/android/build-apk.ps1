@@ -392,3 +392,6 @@ if ($Install) {
         if ($LASTEXITCODE -ne 0) { Fail "adb install failed on $serial" }
     }
 }
+
+# success; otherwise the exit code would be that of the last native command (git diff --quiet is 1 for a dirty tree)
+exit 0
