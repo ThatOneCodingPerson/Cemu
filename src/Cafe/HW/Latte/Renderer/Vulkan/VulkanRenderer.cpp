@@ -3362,7 +3362,7 @@ void VulkanRenderer::SwapBuffers(bool swapTV, bool swapDRC)
 	{
 		SwapBuffer(true);
 #if BOOST_PLAT_ANDROID
-		AndroidPerformanceHint::ReportFrame();
+		AndroidPerformanceHint::ReportFrame(LatteGPUState.sharedArea ? LatteGPUState.sharedArea->swapInterval : 1);
 #endif
 	}
 

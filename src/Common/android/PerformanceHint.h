@@ -9,6 +9,7 @@ namespace AndroidPerformanceHint
 	// adds the calling thread to the emulation session
 	void AddCurrentThread();
 
-	// called by the GPU thread once per presented TV frame
-	void ReportFrame();
+	// called by the GPU thread once per presented TV frame. swapInterval: the title's GX2SetSwapInterval, the number
+	// of 60 Hz vsyncs per frame (2 for 30 fps titles); it sets the target frame time
+	void ReportFrame(uint32 swapInterval);
 } // namespace AndroidPerformanceHint
