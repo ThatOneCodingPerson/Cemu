@@ -16,9 +16,11 @@ import info.cemu.cemu.common.either.bind
 import info.cemu.cemu.common.either.mapError
 import info.cemu.cemu.common.settings.AppSettings
 import info.cemu.cemu.common.settings.AppSettingsStore
+import info.cemu.cemu.common.settings.DEFAULT_TV_SCREEN_PERCENT
 import info.cemu.cemu.common.settings.InputOverlayRect
 import info.cemu.cemu.common.settings.InputOverlaySettings
 import info.cemu.cemu.common.settings.OverlayInputConfig
+import info.cemu.cemu.common.settings.TV_SCREEN_PERCENT_RANGE
 import info.cemu.cemu.nativeinterface.NativeEmulation
 import info.cemu.cemu.nativeinterface.NativeEmulation.PrepareTitleResult
 import kotlinx.coroutines.Dispatchers
@@ -168,6 +170,10 @@ class EmulationViewModel(
             }
         }
     }
+
+    val tvScreenPercent = dataStore.data
+        .map { it.emulationSettings.tvScreenPercent.coerceIn(TV_SCREEN_PERCENT_RANGE) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DEFAULT_TV_SCREEN_PERCENT)
 
     val gamePadPosition = dataStore.data.map { it.emulationSettings.gamePadPosition }
         .stateIn(

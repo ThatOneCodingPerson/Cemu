@@ -7,6 +7,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.viewmodel.compose.viewModel
 import info.cemu.cemu.common.settings.GamePadPosition
+import info.cemu.cemu.common.settings.TV_SCREEN_PERCENT_RANGE
+import info.cemu.cemu.common.ui.components.Slider
 import info.cemu.cemu.common.ui.components.Button
 import info.cemu.cemu.common.ui.components.ScreenContent
 import info.cemu.cemu.common.ui.components.SingleSelection
@@ -73,6 +75,16 @@ fun GeneralSettingsScreen(
             onChoiceChanged = { viewModel.setGamePadPosition(it) },
             choiceToString = { gamePadPositionToString(it) },
             choices = GamePadPosition.entries,
+        )
+
+        Slider(
+            label = tr("TV screen size next to the GamePad"),
+            value = emulationSettings.tvScreenPercent,
+            valueFrom = TV_SCREEN_PERCENT_RANGE.first,
+            valueTo = TV_SCREEN_PERCENT_RANGE.last,
+            steps = (TV_SCREEN_PERCENT_RANGE.last - TV_SCREEN_PERCENT_RANGE.first) / 5 - 1,
+            labelFormatter = { "$it%" },
+            onValueChange = { viewModel.setTvScreenPercent(it) },
         )
     }
 }

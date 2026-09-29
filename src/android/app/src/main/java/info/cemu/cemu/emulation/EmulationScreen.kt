@@ -51,6 +51,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -544,6 +545,7 @@ private fun EmulationSurfaces(
     val activity = context as? Activity
     val sideMenuState by viewModel.sideMenuState.collectAsState()
     val gamePadPosition by viewModel.gamePadPosition.collectAsState()
+    val tvScreenPercent by viewModel.tvScreenPercent.collectAsState()
     val mainSurfaceDimensions by viewModel.mainSurfaceDimensions.collectAsState()
     val padSurfaceDimensions by viewModel.padSurfaceDimensions.collectAsState()
 
@@ -614,19 +616,24 @@ private fun EmulationSurfaces(
         }
     }
 
-    LinearLayout(currentGamePadPosition) { itemModifier ->
-        EmulationSurface(
-            modifier = itemModifier,
-            holderCallback = viewModel.mainHolderCallback,
-            touchListener = mainTouchListener,
-            touchIsTv = isMainTargetingTV,
-            touchSurfaceWidth = mainTargetDimensions.width,
-            touchSurfaceHeight = mainTargetDimensions.height,
-            gameSurfaceViews = gameSurfaceViews,
-            afterInit = { viewModel.initializeEmulation() },
-        )
-
-        if (isPadVisibleEffective && !usePadPresentation) {
+    val isPadInline = isPadVisibleEffective && !usePadPresentation
+    ScreenSplitLayout(
+        gamePadPosition = currentGamePadPosition,
+        tvWeight = if (isPadInline) tvScreenPercent.toFloat() else 100f,
+        padWeight = (100 - tvScreenPercent).toFloat(),
+        tv = { itemModifier ->
+            EmulationSurface(
+                modifier = itemModifier,
+                holderCallback = viewModel.mainHolderCallback,
+                touchListener = mainTouchListener,
+                touchIsTv = isMainTargetingTV,
+                touchSurfaceWidth = mainTargetDimensions.width,
+                touchSurfaceHeight = mainTargetDimensions.height,
+                gameSurfaceViews = gameSurfaceViews,
+                afterInit = { viewModel.initializeEmulation() },
+            )
+        },
+        pad = if (!isPadInline) null else { itemModifier ->
             EmulationSurface(
                 modifier = itemModifier,
                 holderCallback = viewModel.padHolderCallback,
@@ -636,34 +643,35 @@ private fun EmulationSurfaces(
                 touchSurfaceHeight = padTargetDimensions.height,
                 gameSurfaceViews = gameSurfaceViews,
             )
-        }
-    }
+        },
+    )
 }
 
+/**
+ * The TV and, if [pad] isn't null, the GamePad next to each other (or stacked) with the given weights. The pad comes
+ * first for LEFT/ABOVE: both fill the row by weight, so only the child order can put the pad on that side.
+ */
 @Composable
-private fun LinearLayout(
+private fun ScreenSplitLayout(
     gamePadPosition: GamePadPosition,
-    content: @Composable (itemModifier: Modifier) -> Unit,
+    tvWeight: Float,
+    padWeight: Float,
+    tv: @Composable (itemModifier: Modifier) -> Unit,
+    pad: (@Composable (itemModifier: Modifier) -> Unit)?,
 ) {
+    val padFirst = pad != null && !gamePadPosition.appearsAfterTV()
     if (gamePadPosition.isVertical()) {
-        val arrangement =
-            if (gamePadPosition.appearsAfterTV()) Arrangement.Top else Arrangement.Bottom
-
-        Column(
-            modifier = Modifier.fillMaxSize(), verticalArrangement = arrangement
-        ) {
-            content(Modifier.weight(1f))
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (padFirst) pad(Modifier.weight(padWeight))
+            key("tv") { tv(Modifier.weight(tvWeight)) }
+            if (!padFirst) pad?.invoke(Modifier.weight(padWeight))
         }
     } else {
-        val arrangement =
-            if (gamePadPosition.appearsAfterTV()) Arrangement.Start else Arrangement.End
-
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-            Row(
-                modifier = Modifier.fillMaxSize(),
-                horizontalArrangement = arrangement,
-            ) {
-                content(Modifier.weight(1f))
+            Row(modifier = Modifier.fillMaxSize()) {
+                if (padFirst) pad(Modifier.weight(padWeight))
+                key("tv") { tv(Modifier.weight(tvWeight)) }
+                if (!padFirst) pad?.invoke(Modifier.weight(padWeight))
             }
         }
     }

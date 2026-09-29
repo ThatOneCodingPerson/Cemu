@@ -21,7 +21,12 @@ data class EmulationSettings(
     val areScreensSwapped: Boolean = false,
     // whether the user was already offered to show the GamePad on a detected second display
     val wasSecondDisplayOffered: Boolean = false,
+    /** The TV's share of the screen in percent when the GamePad is shown next to it on the same screen. */
+    val tvScreenPercent: Int = DEFAULT_TV_SCREEN_PERCENT,
 )
+
+const val DEFAULT_TV_SCREEN_PERCENT = 50
+val TV_SCREEN_PERCENT_RANGE = 50..80
 
 @Serializable
 data class GuiSettings(

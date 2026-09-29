@@ -48,6 +48,14 @@ class GeneralSettingsViewModel(
         }
     }
 
+    fun setTvScreenPercent(percent: Int) {
+        viewModelScope.launch {
+            dataStore.updateData {
+                it.copy(emulationSettings = it.emulationSettings.copy(tvScreenPercent = percent))
+            }
+        }
+    }
+
     fun setGamePadPosition(gamePadPosition: GamePadPosition) {
         viewModelScope.launch {
             dataStore.updateData {
