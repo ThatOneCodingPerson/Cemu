@@ -166,3 +166,58 @@ Format: date · what was done · what's next · open questions. Keep each entry 
 - An anonymous C++ struct can't hold a `static constexpr` member (build error); use a namespace-scope constant.
 
 **Next:** see "Current focus" in TODO.md. D1/D2/D7 still need the owner's decision.
+
+## 2026-09-29, session 4 (save sync, shader caches, graphics options, per-game/per-model settings)
+**Owner:**
+- Chose option (a) for D1/D2 at the start.
+- Asked for per-game shader compilation.
+- Then: "proceed with what's contained in the claude.md file… not to worry about trying to connect through adb. I will be the one managing the testing of the actual apk". Builds are now handed over without `-Install`, and memory, CLAUDE.md and TODO say so.
+- **Answers to the scope questions:**
+  - Single-file WUA install: dropped.
+  - Save states: a feasibility write-up only, but at high priority.
+  - Second screen: only the display picker (with a Settings entry), at the lowest priority.
+  - Graphics/performance options ("vulkan/openGL") became a new priority item.
+
+**Commits** (every phase built as a dev APK; 31 JVM tests pass: ArchUnit 3, driver 3, SAF 7, keys 4, overlay layouts 7, controller model profiles 7):
+- **Earlier in the session:**
+  - 08a9c4da save sync off the main thread (D1, D2, D7).
+  - 2db34da4/58e76ba0/0cdc1d12 notes.
+- 706e1979 shader cache per game: compile-only launch, import/merge, export, flush on quit.
+- dbf60105 ADPF target follows the title's swap interval.
+- 3cfdb190 save states feasibility (FEATURE_RESEARCH §10).
+- bc8d00b4 graphics options: Vulkan pre-rotation finished (P1), gamma UI, anisotropic filtering override, AMD FSR 1 EASU upscale filter.
+- 463bc6ab "Graphic packs…" for one game.
+- 7c177945 separate input overlay layout per game (#5).
+- a068f91b controller layouts per model (vendor:product) (#2).
+- 2aac0ca9 display picker (#4).
+- 2fb686f5 build-apk.ps1 exits 0 on success (it returned `git diff --quiet`'s 1 for a dirty tree).
+- **Notes:** 539cbe5d, 9a0df255, e8e248b2 and this entry.
+
+**Artifact:** `dist/android/output/Cemu-0.5.1-2aac0ca9-dev.apk` (= `Cemu-latest-dev.apk`). Device test lists are at each `[?]` item in TODO.md.
+
+**Research this session (all 2026-09-29):**
+- **Save states:** cemu-project/Cemu PR #953 and issue #2062 (GitHub API). The Matt-Wood-23/Cemu `savestates` branch: its compare, docs and `src/Cafe/SaveState`, MPL-2.0, verified with MH3U on x64. Drift against our core is small (FEATURE_RESEARCH §10).
+- **Emulator settings:** Eden `IntSetting.kt`/`BooleanSetting.kt`/`arrays.xml` (GPL, ideas only) and Dolphin's settings enums, for the graphics options.
+- **FSR 1:** AMD FidelityFX-FSR `ffx_fsr1.h` v1.20210629 and `ffx_a.h` (MIT). Approximation constants verified: `0x7ef07ebb` and `0x5f347d74`.
+- **AOSP `libvulkan/swapchain.cpp`** (googlesource main; the GitHub aosp-mirror is gone):
+  - `currentExtent` is in the window's orientation.
+  - Present returns `VK_SUBOPTIMAL_KHR` only for a transform mismatch.
+
+**Lessons:**
+- In PowerShell, `git commit -F -` with a here-string doesn't read stdin. Write the message to a scratchpad file and pass the path.
+- The bootstrapped JDK is one level deeper (`CemuAndroidBuild\jdk-21\jdk-21.0.x+y`). The scratchpad `run-tests.ps1` finds it; for a new session: `$env:JAVA_HOME` = that folder, then `gradlew :app:testDebugUnitTest` from the subst drive.
+- Changing `CemuConfig.h` or `EmulatedController.h` rebuilt ~150 objects in about 2 minutes, not the whole tree.
+- The auto-mode safety check again failed transiently for Bash. Edits and reads kept working; retrying later worked.
+
+**Open questions for the owner:**
+- **Save states:** port the Matt-Wood-23 branch as an experimental feature (yes/no), and which 2–3 games to test with.
+- **Pre-rotation:** does the Thor report 0° (landscape panels)? The log line `pre-rotation N degrees` tells.
+
+**Next:**
+- Regressions from the owner's device tests come first.
+- Save-state port step A if approved.
+- Leftovers:
+  - deadzones in controller model profiles;
+  - switching controller 1 when a better pad connects while built-in controls are mapped;
+  - FXAA/RCAS;
+  - the gap table's Azahar/PPSSPP/NetherSX2/Vita3K cells.

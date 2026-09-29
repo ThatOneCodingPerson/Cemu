@@ -19,7 +19,8 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
   3. [?] Graphics options (see "Graphics options" below): research, pre-rotation (P1), gamma, anisotropic filtering, AMD FSR 1 upscale filter (bc8d00b4), graphic packs per game (463bc6ab).
   4. [?] Per-game overlay layouts (#5, 7c177945).
   5. [?] Per vendor:product controller profiles (#2), see the backlog item.
-  6. [ ] Display picker, with a Settings entry (#4), at the lowest priority.
+  6. [?] Display picker, with a Settings entry (#4, 2aac0ca9).
+- **Latest APK (end of session 4):** `dist/android/output/Cemu-0.5.1-2aac0ca9-dev.apk` (= `Cemu-latest-dev.apk`). It contains everything above.
 - **Owner decisions (2026-09-29):**
   - #6 single-file WUA/WUP install: dropped. Cemu runs .wua/.wud/.wux and WUP folders from a games folder, and adding that folder as a game path covers it.
   - #4: only the display picker. "Mirror the main screen" and "input overlay on the second screen" are not planned. The performance overlay already draws on both screens.
@@ -176,7 +177,7 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 - [?] Swap screens persisted; a one-time "Second screen detected: show GamePad there" snackbar, fe594253
 - [?] Single-screen devices: "External PAD screen" and "Rotate external screen left" are hidden without a second display, fe594253
 - [?] Split ratio setting for the inline pad (adf22428)
-- [ ] Display picker when there are 2+ candidates, with a Settings entry (backlog #4, lowest priority in session 4)
+- [?] Display picker when there are 2+ candidates, with a Settings entry (2026-09-29, 2aac0ca9; device test at backlog #4)
 - **Device test:**
   - Thor: 120 Hz main screen not throttled when the pad is on the bottom screen (overlay FPS).
   - Pad touch maps correctly; the pad notifications are sized right on the bottom screen.
@@ -316,7 +317,12 @@ The owner asked for "graphical settings that can help improvements for games eit
        - The slider changes the TV/GamePad split.
        - All four GamePad positions put the pad on that side.
        - Touch on both surfaces still hits the right spots.
-   - [ ] Display picker + per-display memory, with a Settings entry (only matters with 2+ candidate displays, e.g. Thor + HDMI). Lowest priority.
+   - [?] Display picker (2026-09-29, 2aac0ca9): Settings > General > "GamePad display": Automatic or a connected second screen, remembered by display name. Offered only while a second screen is connected, or a choice was saved.
+     - **Device test:**
+       - Thor alone: the entry lists the bottom screen, and Automatic behaves as before.
+       - Thor + HDMI monitor (or a phone with two external displays): pick the monitor, start a game, turn on External PAD screen: the GamePad is on the monitor. Pick the bottom screen: it is there.
+       - Unplug the chosen monitor: it falls back to the other screen, and the entry shows "(not connected)".
+       - Phone without a second screen: no entry.
    - Not planned (owner, 2026-09-29): mirror the main screen, input overlay on the second screen. The performance overlay already draws on both screens (`LatteOverlay_render(isPadView)`).
 5. [?] Per-game controller profiles and overlay layouts
    - [?] Named controller profiles (Controller N > Profiles: save/load/delete) + "Controller N profile" in Edit game profile, using the core's `[Controller]` game profile support (2026-09-29, 89469694)
