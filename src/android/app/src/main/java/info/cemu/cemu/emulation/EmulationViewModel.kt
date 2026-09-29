@@ -50,6 +50,8 @@ sealed interface NativeError {
     object NoDiscKeysError : NativeError
     object NoTitleTikError : NativeError
     data class UnknownTilePrepareError(val launchPath: String) : NativeError
+    object InvalidExecutableError : NativeError
+    data class UnableToMountError(val launchPath: String) : NativeError
     data class SystemInitializationError(val message: String) : NativeError
 
     object LaunchingTitleError : NativeError
@@ -259,6 +261,8 @@ class EmulationViewModel(
                         PrepareTitleResult.ERROR_GAME_BASE_FILES_NOT_FOUND -> Error(NativeError.GameFilesNotFoundError)
                         PrepareTitleResult.ERROR_NO_DISC_KEY -> Error(NativeError.NoDiscKeysError)
                         PrepareTitleResult.ERROR_NO_TITLE_TIK -> Error(NativeError.NoTitleTikError)
+                        PrepareTitleResult.ERROR_INVALID_EXECUTABLE -> Error(NativeError.InvalidExecutableError)
+                        PrepareTitleResult.ERROR_UNABLE_TO_MOUNT -> Error(NativeError.UnableToMountError(launchPath))
                         else -> Error(NativeError.UnknownTilePrepareError(launchPath))
                     }
                 },

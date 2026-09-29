@@ -717,6 +717,12 @@ private fun EmulationErrorDialog(error: NativeError, onQuit: () -> Unit) {
             is NativeError.UnknownTilePrepareError ->
                 tr("Unable to launch game\nPath: {0}", error.launchPath)
 
+            NativeError.InvalidExecutableError ->
+                tr("Unable to launch game because the executable (RPX) is invalid or damaged.")
+
+            is NativeError.UnableToMountError ->
+                tr("Unable to launch game because its files could not be opened. The file may have been moved or the folder permission revoked.\nPath: {0}", error.launchPath)
+
             NativeError.LaunchingTitleError -> tr("Failed to launch title")
         }
     }

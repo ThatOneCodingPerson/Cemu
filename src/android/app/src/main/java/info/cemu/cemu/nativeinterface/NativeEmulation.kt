@@ -43,6 +43,8 @@ object NativeEmulation {
         const val ERROR_NO_DISC_KEY: Int = 2
         const val ERROR_NO_TITLE_TIK: Int = 3
         const val ERROR_UNKNOWN: Int = 4
+        const val ERROR_INVALID_EXECUTABLE: Int = 5
+        const val ERROR_UNABLE_TO_MOUNT: Int = 6
     }
 
     @JvmStatic

@@ -169,7 +169,23 @@ namespace NativeEmulation
 		ERROR_NO_DISC_KEY = 2,
 		ERROR_NO_TITLE_TIK = 3,
 		ERROR_UNKNOWN = 4,
+		ERROR_INVALID_EXECUTABLE = 5,
+		ERROR_UNABLE_TO_MOUNT = 6,
 	};
+
+	PrepareTitleResult ToPrepareTitleResult(CafeSystem::PREPARE_STATUS_CODE statusCode)
+	{
+		switch (statusCode)
+		{
+		case CafeSystem::PREPARE_STATUS_CODE::SUCCESS:
+			return SUCCESSFUL;
+		case CafeSystem::PREPARE_STATUS_CODE::INVALID_RPX:
+			return ERROR_INVALID_EXECUTABLE;
+		case CafeSystem::PREPARE_STATUS_CODE::UNABLE_TO_MOUNT:
+			return ERROR_UNABLE_TO_MOUNT;
+		}
+		return ERROR_UNKNOWN;
+	}
 
 	class TestSurface
 	{
@@ -392,56 +408,43 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_initializeSystems([[maybe_un
 extern "C" [[maybe_unused]] JNIEXPORT jint JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeEmulation_prepareTitle([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jstring launchPathJava)
 {
-	fs::path launchPath = JNIUtils::FromJString(env, launchPathJava);
-
-	TitleInfo launchTitle{launchPath};
-
 	using enum NativeEmulation::PrepareTitleResult;
+	jint result = ERROR_UNKNOWN;
+	// filesystem/title parsing errors must not escape JNI (std::terminate); the Kotlin side reports them
+	JNIUtils::HandleNativeException(env, [&]() {
+		fs::path launchPath = JNIUtils::FromJString(env, launchPathJava);
 
-	if (launchTitle.IsValid())
-	{
-		// the title might not be in the TitleList, so we add it as a temporary entry
-		CafeTitleList::AddTitleFromPath(launchPath);
-		// title is valid, launch from TitleId
-		TitleId baseTitleId;
-		if (!CafeTitleList::FindBaseTitleId(launchTitle.GetAppTitleId(), baseTitleId))
+		TitleInfo launchTitle{launchPath};
+
+		if (launchTitle.IsValid())
 		{
-			return ERROR_GAME_BASE_FILES_NOT_FOUND;
-		}
-		CafeSystem::PREPARE_STATUS_CODE r = CafeSystem::PrepareForegroundTitle(baseTitleId);
-		if (r != CafeSystem::PREPARE_STATUS_CODE::SUCCESS)
-		{
-			return ERROR_UNKNOWN;
-		}
-	}
-	else // if (launchTitle.GetFormat() == TitleInfo::TitleDataFormat::INVALID_STRUCTURE )
-	{
-		// title is invalid, if it's an RPX/ELF we can launch it directly
-		// otherwise it's an error
-		CafeTitleFileType fileType = DetermineCafeSystemFileType(launchPath);
-		if (fileType == CafeTitleFileType::RPX || fileType == CafeTitleFileType::ELF)
-		{
-			CafeSystem::PREPARE_STATUS_CODE r = CafeSystem::PrepareForegroundTitleFromStandaloneRPX(launchPath);
-			if (r != CafeSystem::PREPARE_STATUS_CODE::SUCCESS)
+			// the title might not be in the TitleList, so we add it as a temporary entry
+			CafeTitleList::AddTitleFromPath(launchPath);
+			// title is valid, launch from TitleId
+			TitleId baseTitleId;
+			if (!CafeTitleList::FindBaseTitleId(launchTitle.GetAppTitleId(), baseTitleId))
 			{
-				return ERROR_UNKNOWN;
+				result = ERROR_GAME_BASE_FILES_NOT_FOUND;
+				return;
 			}
+			result = NativeEmulation::ToPrepareTitleResult(CafeSystem::PrepareForegroundTitle(baseTitleId));
 		}
-		else if (launchTitle.GetInvalidReason() == TitleInfo::InvalidReason::NO_DISC_KEY)
+		else // if (launchTitle.GetFormat() == TitleInfo::TitleDataFormat::INVALID_STRUCTURE )
 		{
-			return ERROR_NO_DISC_KEY;
+			// title is invalid, if it's an RPX/ELF we can launch it directly
+			// otherwise it's an error
+			CafeTitleFileType fileType = DetermineCafeSystemFileType(launchPath);
+			if (fileType == CafeTitleFileType::RPX || fileType == CafeTitleFileType::ELF)
+				result = NativeEmulation::ToPrepareTitleResult(CafeSystem::PrepareForegroundTitleFromStandaloneRPX(launchPath));
+			else if (launchTitle.GetInvalidReason() == TitleInfo::InvalidReason::NO_DISC_KEY)
+				result = ERROR_NO_DISC_KEY;
+			else if (launchTitle.GetInvalidReason() == TitleInfo::InvalidReason::NO_TITLE_TIK)
+				result = ERROR_NO_TITLE_TIK;
+			else
+				result = ERROR_UNKNOWN;
 		}
-		else if (launchTitle.GetInvalidReason() == TitleInfo::InvalidReason::NO_TITLE_TIK)
-		{
-			return ERROR_NO_TITLE_TIK;
-		}
-		else
-		{
-			return ERROR_UNKNOWN;
-		}
-	}
-
-	return SUCCESSFUL;
+	});
+	return result;
 }
 
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
