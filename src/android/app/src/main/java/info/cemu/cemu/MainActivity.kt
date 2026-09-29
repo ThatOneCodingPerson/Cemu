@@ -6,9 +6,11 @@ import android.content.Intent
 import android.content.pm.ShortcutInfo
 import android.content.pm.ShortcutManager
 import android.graphics.drawable.Icon
+import android.hardware.input.InputManager
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.animation.EnterTransition
@@ -16,11 +18,15 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import info.cemu.cemu.about.AboutCemuRoute
 import info.cemu.cemu.about.aboutCemuNavigation
+import info.cemu.cemu.common.input.ControllerAutoMapper
 import info.cemu.cemu.common.input.GamepadInputSource
+import info.cemu.cemu.common.input.InputDeviceListener
+import info.cemu.cemu.common.settings.AppSettingsStore
 import info.cemu.cemu.common.ui.components.ActivityContent
 import info.cemu.cemu.common.ui.localization.TranslatableContent
 import info.cemu.cemu.common.ui.localization.tr
@@ -36,6 +42,8 @@ import info.cemu.cemu.settings.SettingsRoute
 import info.cemu.cemu.settings.settingsNavigation
 import info.cemu.cemu.titlemanager.TitleManagerRoute
 import info.cemu.cemu.titlemanager.titleManagerNavigation
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
@@ -77,6 +85,7 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         NativeSettings.saveSettings()
+        inputManager?.unregisterInputDeviceListener(controllerListener)
     }
 
     override fun onResume() {
@@ -84,6 +93,28 @@ class MainActivity : AppCompatActivity() {
         // the emulator may have terminated because of an error while no dialog could be shown
         NativeErrors.takeLastSessionError()?.let { error ->
             NativeErrors.show(tr("Cemu stopped because of an error"), error)
+        }
+        inputManager?.registerInputDeviceListener(controllerListener, null)
+        autoConfigureControllers()
+    }
+
+    private val inputManager
+        get() = getSystemService(INPUT_SERVICE) as InputManager?
+
+    private val controllerListener = object : InputDeviceListener {
+        override fun onInputDeviceChanged() = autoConfigureControllers()
+    }
+
+    // a connected controller works without setup, see ControllerAutoMapper
+    private fun autoConfigureControllers() {
+        lifecycleScope.launch {
+            val isAutoMapEnabled = AppSettingsStore.dataStore.data.first().isControllerAutoMapEnabled
+            val mappedControllerName = ControllerAutoMapper.autoConfigure(isAutoMapEnabled) ?: return@launch
+            Toast.makeText(
+                this@MainActivity,
+                tr("\"{0}\" was mapped to controller 1. Change it in the input settings.", mappedControllerName),
+                Toast.LENGTH_LONG,
+            ).show()
         }
     }
 }

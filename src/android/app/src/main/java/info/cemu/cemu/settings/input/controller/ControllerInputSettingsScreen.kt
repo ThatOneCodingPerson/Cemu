@@ -94,6 +94,7 @@ fun ControllerInputSettingsScreen(
     val activeController by viewModel.activeController.collectAsState()
 
     var showMapAllInputsDialog by rememberSaveable { mutableStateOf(false) }
+    var controllerToMap by remember { mutableStateOf<InputController?>(null) }
     var showControllerSettingsDialog by rememberSaveable { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -210,7 +211,18 @@ fun ControllerInputSettingsScreen(
         ControllerSelectDialog(
             controllers = controllers,
             onDismissRequest = { showMapAllInputsDialog = false },
-            onSelect = { viewModel.mapAllInputs(it.id) },
+            onSelect = { controllerToMap = it },
+        )
+    }
+
+    controllerToMap?.let { controller ->
+        FaceButtonLayoutPopup(
+            controller = controller,
+            onLayoutSelected = { swapFaceButtons ->
+                viewModel.mapAllInputs(controller.id, swapFaceButtons)
+                controllerToMap = null
+            },
+            onDismiss = { controllerToMap = null },
         )
     }
 
@@ -413,6 +425,86 @@ private fun ControllerSelectDialog(
                     .align(Alignment.End),
             ) {
                 Text(tr("Cancel"))
+            }
+        }
+    }
+}
+
+/**
+ * Asks for the button to use as A before mapping all inputs: a press of BUTTON_A keeps the button names, BUTTON_B
+ * (Xbox-style layouts, right face button) swaps A/B and X/Y to use the Wii U button positions. Nintendo controllers
+ * give the same result either way. A Popup, unlike a Dialog, leaves key events to the activity (GamepadInputSource).
+ */
+@Composable
+private fun FaceButtonLayoutPopup(
+    controller: InputController,
+    onLayoutSelected: (swapFaceButtons: Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    LaunchedEffect(controller) {
+        GamepadInputSource.keyEvents.collect { (event) ->
+            if (event.deviceId != controller.id || event.action != KeyEvent.ACTION_DOWN || event.repeatCount != 0) {
+                return@collect
+            }
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_BUTTON_A -> onLayoutSelected(false)
+                KeyEvent.KEYCODE_BUTTON_B -> onLayoutSelected(true)
+            }
+        }
+    }
+
+    Popup(alignment = Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.4f))
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                    onClick = onDismiss
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                modifier = Modifier
+                    .sizeIn(maxWidth = 560.dp, maxHeight = 560.dp)
+                    .padding(16.dp),
+                shape = RoundedCornerShape(16.dp),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 16.dp)
+                ) {
+                    Text(
+                        text = tr("Map all inputs"),
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    Text(
+                        text = tr("Press the button on {0} that should be the A button.", controller.name),
+                        fontSize = 16.sp,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    Text(
+                        text = tr("Press the button labeled A to keep the printed button names, or the right one of the four face buttons to use the Wii U button positions."),
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = { onLayoutSelected(false) }) { Text(tr("Use button names")) }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        TextButton(onClick = onDismiss) { Text(tr("Cancel")) }
+                    }
+                }
             }
         }
     }

@@ -11,6 +11,8 @@ import info.cemu.cemu.common.android.inputdevice.hasMotion
 import info.cemu.cemu.common.android.inputdevice.hasRumble
 import info.cemu.cemu.common.android.inputdevice.listGameControllers
 import info.cemu.cemu.common.android.inputdevice.toControllerInfo
+import info.cemu.cemu.common.input.InputMapper
+import info.cemu.cemu.common.input.getNativeButtonsForControllerType
 import info.cemu.cemu.nativeinterface.NativeInput
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -92,12 +94,12 @@ class ControllersViewModel(val controllerIndex: Int) : ViewModel() {
         return gameControllers.isNotEmpty()
     }
 
-    fun mapAllInputs(deviceId: Int) {
+    fun mapAllInputs(deviceId: Int, swapFaceButtons: Boolean) {
         val oldControls = _controls.value
         _controls.value = emptyMap()
         oldControls.keys.forEach { NativeInput.clearControllerMapping(controllerIndex, it) }
 
-        InputMapper.mapAllInputs(deviceId, controllerIndex)
+        InputMapper.mapAllInputs(deviceId, controllerIndex, swapFaceButtons)
 
         val buttons = getNativeButtonsForControllerType(controllerType.value)
         buttons.forEach { _controls.value += getControllerMapping(it.nativeKeyCode) }

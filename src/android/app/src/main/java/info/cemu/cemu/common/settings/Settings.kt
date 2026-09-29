@@ -67,6 +67,8 @@ data class AppSettings(
     val storageSettings: StorageSettings = StorageSettings(),
     val inputOverlaySettings: InputOverlaySettings = InputOverlaySettings(),
     val hotkeySettings: Map<HotkeyAction, HotkeyCombo> = emptyMap(),
+    /** Map a connected controller to controller 1 while that has no mappings (ControllerAutoMapper). */
+    val isControllerAutoMapEnabled: Boolean = true,
 )
 
 object AppSettingsSerializer : Serializer<AppSettings> {

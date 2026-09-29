@@ -1,4 +1,4 @@
-package info.cemu.cemu.settings.input.controller
+package info.cemu.cemu.common.input
 
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -123,12 +123,18 @@ object InputMapper {
         )
     }
 
-    fun mapAllInputs(deviceId: Int, controllerIndex: Int) {
+    /**
+     * Maps all inputs of the emulated controller to the standard gamepad inputs of the device, by button name
+     * (Wii U A = Android BUTTON_A). With [swapFaceButtons] A/B and X/Y are swapped: for controllers whose button in
+     * the Wii U A position (right) reports BUTTON_B, e.g. Xbox layouts when mapping by position.
+     * Returns the number of mapped inputs.
+     */
+    fun mapAllInputs(deviceId: Int, controllerIndex: Int, swapFaceButtons: Boolean = false): Int {
         if (NativeInput.isControllerDisabled(controllerIndex)) {
-            return
+            return 0
         }
         val controllerType = NativeInput.getControllerType(controllerIndex)
-        val device = InputDevice.getDevice(deviceId) ?: return
+        val device = InputDevice.getDevice(deviceId) ?: return 0
 
         val inputs = mutableMapOf<InputMapping, Boolean>().apply {
             val buttonKeyCodes =
@@ -147,14 +153,18 @@ object InputMapper {
         }
 
         val buttons = getNativeButtonsForControllerType(controllerType)
+        var mappedCount = 0
 
         for (button in buttons) {
-            val mapping = getButtonMappings(button).firstOrNull { inputs[it] == true }
+            val mapping = getButtonMappings(button)
+                .map { if (swapFaceButtons) it.withSwappedFaceButton() else it }
+                .firstOrNull { inputs[it] == true }
                 ?: FALLBACK_BUTTONS.firstOrNull { inputs[it] == true }
             if (mapping == null) {
                 continue
             }
             inputs[mapping] = false
+            mappedCount++
 
             val buttonId = button.nativeKeyCode
 
@@ -179,6 +189,7 @@ object InputMapper {
                 )
             }
         }
+        return mappedCount
     }
 
     private fun getButtonMappings(button: NativeInputButton): Array<InputMapping> {
@@ -324,6 +335,14 @@ object InputMapper {
 
 
 private sealed interface InputMapping
+
+private fun InputMapping.withSwappedFaceButton(): InputMapping = when (this) {
+    ButtonInputMapping.BUTTON_A -> ButtonInputMapping.BUTTON_B
+    ButtonInputMapping.BUTTON_B -> ButtonInputMapping.BUTTON_A
+    ButtonInputMapping.BUTTON_X -> ButtonInputMapping.BUTTON_Y
+    ButtonInputMapping.BUTTON_Y -> ButtonInputMapping.BUTTON_X
+    else -> this
+}
 
 private enum class ButtonInputMapping(val keyCode: Int) : InputMapping {
     BUTTON_1(KeyEvent.KEYCODE_BUTTON_1),
