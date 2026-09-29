@@ -24,8 +24,13 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
   - The D1/D2 save-sync design decision (see Phase 3).
 - **Next session, in order:**
   1. If a device is attached: install, walk the `[?]` device-test lists (newest first), pull logs, fix regressions.
-  2. [?] SAF path encoding (9e51a7b8). Next: K13/K16/K17/K27 and P1/P4/P9.
-  3. Backlog #4, dual-screen polish, then #5 per-game controller profiles (also covers the auto-map follow-up).
+  2. [?] SAF path encoding (9e51a7b8). [?] K16 (76d76442), K17 + K27 (ef6fc725).
+     - **Device test:**
+       - Enable motion, trigger an activity recreation (e.g. multi-window/resize if possible): motion still works.
+       - Overlay edit > resize: follows the finger smoothly and still resizes at the screen edge.
+       - A layout saved on one device/screen size shows every button on screen on another.
+  3. Next: K13 (title install as a foreground task), P9 (pipeline compiler threads), P1 (pre-rotation).
+  4. Backlog #4, dual-screen polish, then #5 per-game controller profiles (also covers the auto-map follow-up).
 
 ---
 
