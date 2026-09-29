@@ -103,6 +103,7 @@ fun EmulationScreen(
     var showQuitConfirmationDialog by remember { mutableStateOf(false) }
     var inputOverlayInputMode by rememberSaveable { mutableStateOf(DEFAULT) }
     var showEmulatedUSBDevices by remember { mutableStateOf(false) }
+    var showAmiiboDialog by remember { mutableStateOf(false) }
 
     val emulationError by viewModel.emulationError.collectAsState()
     val isEmulationInitialized by viewModel.isEmulationInitialized.collectAsState()
@@ -214,6 +215,8 @@ fun EmulationScreen(
                 HotkeyAction.TOGGLE_PAD -> toggleSideMenuOption { it.copy(isPadVisible = !it.isPadVisible) }
                 HotkeyAction.TOGGLE_INPUT_OVERLAY ->
                     toggleSideMenuOption { it.copy(isInputOverlayVisible = !it.isInputOverlayVisible) }
+
+                HotkeyAction.SCAN_AMIIBO -> showAmiiboDialog = true
             }
         }
     }
@@ -240,6 +243,10 @@ fun EmulationScreen(
                         onTakeScreenshot = {
                             closeDrawer()
                             takeScreenshot()
+                        },
+                        onScanAmiibo = {
+                            closeDrawer()
+                            showAmiiboDialog = true
                         },
                         updateState = {
                             viewModel.updateSideMenuState(it)
@@ -329,6 +336,13 @@ fun EmulationScreen(
         EmulationErrorDialog(it, onQuit)
     }
 
+    if (showAmiiboDialog) {
+        AmiiboDialog(
+            onMessage = { snackbarHostState.showMessage(scope, it) },
+            onDismiss = { showAmiiboDialog = false },
+        )
+    }
+
     if (!isEmulationInitialized) {
         EmulationLoadingDialog()
     }
@@ -394,6 +408,7 @@ private fun EmulationSideMenuContent(
     isPaused: Boolean,
     onTogglePause: () -> Unit,
     onTakeScreenshot: () -> Unit,
+    onScanAmiibo: () -> Unit,
     updateState: (SideMenuState) -> Unit,
     onShowEmulatedUSBDevices: () -> Unit,
     onEditInputOverlay: () -> Unit,
@@ -410,6 +425,11 @@ private fun EmulationSideMenuContent(
         label = tr("Take screenshot"),
         enabled = !isPaused,
         onClick = onTakeScreenshot,
+    )
+
+    TextButtonItem(
+        label = tr("Scan amiibo"),
+        onClick = onScanAmiibo,
     )
 
     CheckboxItem(

@@ -5,6 +5,7 @@
 #include "Cafe/HW/Latte/Core/LatteOverlay.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
+#include "Cafe/OS/libs/nfc/nfc.h"
 #include "Cafe/OS/libs/snd_core/ax.h"
 #include "Cafe/TitleList/TitleId.h"
 #include "Cafe/TitleList/TitleList.h"
@@ -522,6 +523,22 @@ extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeEmulation_resumeTitle([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
 {
 	CafeSystem::ResumeTitle();
+}
+
+// Touches an NFC tag (amiibo) file to the emulated reader, like desktop Cemu's "Scan NFC tag from file". The game
+// may write the tag back to the file, so it must be writable (not a SAF document). Returns 0,
+// NFC_TOUCH_TAG_ERROR_NO_ACCESS, NFC_TOUCH_TAG_ERROR_INVALID_FILE_FORMAT, or -1 if no title runs.
+extern "C" [[maybe_unused]] JNIEXPORT jint JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeEmulation_touchNfcTagFromFile(JNIEnv* env, [[maybe_unused]] jclass clazz, jstring path)
+{
+	jint result = -1;
+	JNIUtils::HandleNativeException(env, [&]() {
+		if (!CafeSystem::IsTitleRunning())
+			return;
+		uint32 nfcError = NFC_TOUCH_TAG_ERROR_NONE;
+		result = nfc::TouchTagFromFile(JNIUtils::FromJString(env, path), &nfcError) ? NFC_TOUCH_TAG_ERROR_NONE : static_cast<jint>(nfcError);
+	});
+	return result;
 }
 
 namespace NativeEmulation

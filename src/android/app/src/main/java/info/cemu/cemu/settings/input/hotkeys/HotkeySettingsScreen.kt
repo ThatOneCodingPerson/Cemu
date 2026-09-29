@@ -218,6 +218,7 @@ private fun hotkeyActionToString(hotkeyAction: HotkeyAction) = when (hotkeyActio
     HotkeyAction.SWAP_SCREENS -> tr("Swap screens")
     HotkeyAction.TOGGLE_PAD -> tr("Show / hide PAD")
     HotkeyAction.TOGGLE_INPUT_OVERLAY -> tr("Show / hide input overlay")
+    HotkeyAction.SCAN_AMIIBO -> tr("Scan amiibo")
 }
 
 @Composable

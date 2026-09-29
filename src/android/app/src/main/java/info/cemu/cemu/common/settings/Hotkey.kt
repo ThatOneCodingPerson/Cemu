@@ -17,4 +17,5 @@ enum class HotkeyAction {
     SWAP_SCREENS,
     TOGGLE_PAD,
     TOGGLE_INPUT_OVERLAY,
+    SCAN_AMIIBO,
 }

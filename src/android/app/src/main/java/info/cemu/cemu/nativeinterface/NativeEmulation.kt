@@ -105,6 +105,20 @@ object NativeEmulation {
         _screenshots.tryEmit(Screenshot(rgba, width, height))
     }
 
+    object NfcTouchResult {
+        const val SUCCESS: Int = 0
+        const val NO_ACCESS: Int = 1
+        const val INVALID_FILE_FORMAT: Int = 2
+        const val NO_TITLE_RUNNING: Int = -1
+    }
+
+    /**
+     * Touches an NFC tag file (amiibo .bin) to the emulated NFC reader, see [NfcTouchResult]. The game may write the
+     * tag back, so [path] must be a writable local file.
+     */
+    @JvmStatic
+    external fun touchNfcTagFromFile(path: String): Int
+
     /** Terminates the emulation process after flushing logs. Never returns. */
     @JvmStatic
     external fun quitProcess()
