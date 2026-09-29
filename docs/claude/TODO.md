@@ -235,7 +235,13 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
        - Touch on both surfaces still hits the right spots.
    - [ ] Display picker + per-display memory (only matters with 2+ candidate displays, e.g. Thor + HDMI)
    - [ ] Mirror the TV on the second screen; input overlay / performance overlay on the second screen
-5. [ ] Per-game controller profiles and overlay layouts
+5. [~] Per-game controller profiles and overlay layouts
+   - [?] Named controller profiles (Controller N > Profiles: save/load/delete) + "Controller N profile" in Edit game profile, using the core's `[Controller]` game profile support (2026-09-29, 89469694)
+     - **Device test:**
+       - Save profile "A", change mappings, save "B".
+       - Load "A": the old mappings (and type) are back. Mapping a button right after loading works (the cached controller is reloaded).
+       - Pick "B" as Controller 1 profile in a game's profile: that game uses B, other games use the normal configuration.
+   - [ ] Per-game overlay layouts
 6. [~] Save backup/restore per title; single-file WUA/WUP install picker
    - [?] Title manager > save entry menu > Export save (zip) / Import save (confirm, staged, rollback; marks the save mirror dirty with a custom root) (2026-09-29, 30c39093)
      - **Device test:**
