@@ -16,7 +16,7 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 - **Owner feedback (session 3 start, 2026-09-28):** "so far it's doing pretty great". Testing on their own devices went well, and no specific regressions were reported. Items stay `[?]` until confirmed individually. The owner asked to keep working through the list.
 - **Blocked on the owner:**
   - Device tests over adb: the Thor has no USB debugging (MTP only, `adb devices` empty through session 3).
-  - (D1/D2 decided 2026-09-29: option (a), background sync gated by a "Syncing saves…" screen; in progress.)
+  - (D1/D2 decided 2026-09-29: option (a); built in 08a9c4da, awaiting device test.)
 - **Session 2 (2026-09-28):**
   - [?] Open bugs: K14, K15, K18, K25, K26 (c27e208b), A15 (aaab5241, 08ddc021), B5 (4392ec37).
   - [?] Driver fetcher (e8efeb45), hotkeys (1c18255f), auto-map (8e9a5094).
@@ -123,14 +123,21 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 - [?] Manifest `configChanges` (A12); missing launch path handled (A15, partial); relaunch while running attaches to the running title (K2)
 - [?] Pipeline cache: atomic write, flush on quit (2 s max), save on pause (A13)
 - [?] Data files: hash written last, cross-process file lock (A14)
-- [~] **D1/D2: the owner chose option (a)** (2026-09-29, "let's continue working on that" in reply to the recommendation). SAF save sync runs synchronously on the main thread at startup (every process, including each game launch) and on quit/background. The options were:
+- [?] **D1/D2/D7: the owner chose option (a)** (2026-09-29, "let's continue working on that" in reply to the recommendation). Built in 08a9c4da.
+  - **Device test** (only with a custom data folder set in Settings > Data storage):
+    - Cold start with many saves: the game list shows "Syncing saves…" briefly, no ANR, then it's usable.
+    - Launch a game from the list: no second sync, and it starts quickly.
+    - Play, save in-game, Quit: "Saving…" shows briefly, and the custom folder has the new save.
+    - Home-screen shortcut with the app closed: "Syncing saves…" first, then the game.
+    - Press Home mid-game, then open Settings > Data storage in the game list: it knows a game runs.
+    - Force-stop mid-game, restart: the save is still there (the dirty mirror is exported, not overwritten). SAF save sync runs synchronously on the main thread at startup (every process, including each game launch) and on quit/background. The options were:
   - (a) keep the sync but run it on a background thread, and gate game launch and the save UI on its completion (a "Syncing saves…" screen), or
   - (b) only sync in the main process and before launch, with a progress dialog.
   - Don't just move it off the main thread: a game could read or write saves mid-import and the export could overwrite newer data.
 - [?] D3 observer map thread-safe
 - [?] Kotlin crash fixes K1, K4, K5, K6, K7, K8, K9, K10, K11
 - [?] Native races N10, N11, N12
-- [ ] D7 cross-process "is emulation running" state (main process can't see the emulation process)
+- [?] D7 cross-process "is emulation running" state (08a9c4da, `emulation-session.lock`)
 - [?] K13 title install foreground service + recovery (6d877933); K14 WUA compression uses the filtered list, K15 account deletion (c27e208b)
 - **Device test:**
   1. Revoke the games folder permission (Android settings → app → storage), open the game list: no crash, just no games.
