@@ -204,7 +204,7 @@ Ours (76ac98f1) follows the same approach with one session.
 - **Save export/import per title**: backup and restore of a single game's save as a zip. Most useful for moving between devices.
 - **Installing single-file WUA/WUP through a file picker** (today: install from a folder only).
 - A long-running install/convert as a **foreground service**, so it survives backgrounding (K13).
-- **Shader cache import/export** (Cemu's transferable caches are portable between devices of the same driver family).
+- **Shader cache import/export**. Cemu's transferable caches are portable between any devices and drivers; only the compiled caches are per driver (§8). Built 2026-09-29, see TODO "Shader compilation per game".
 - Play-time and last-played display exists, but there are no sorting options (recent, most played).
 
 ## 7. Input and controls (beyond auto-map)
@@ -260,7 +260,30 @@ Ours (76ac98f1) follows the same approach with one session.
 3. **"Compile shaders now":** launch the game in a compile-only mode. The Latte thread runs `LatteShaderCache_Load`; then the app saves the driver pipeline cache and exits before gameplay, reporting the counts.
 4. **Show counts** (shaders, pipelines, whether the driver cache exists).
 
-**Caveat:** don't import while the same game is running in the emulation process (D7: the main process can't see it); the UI warns.
+**Caveat:** don't import while the same game is running in the emulation process. The emulation session lock (D7) now makes it visible, and compile-only mode holds that lock too.
+
+**Built (session 4):** all four steps, see TODO "Shader compilation per game". Metal caches (`_mtlshaders.bin`) have the same header and are skipped by name. Custom graphic-pack output shaders that read `gl_FragCoord` would see rotated coordinates with pre-rotation (§9); none of the built-in ones do.
+
+## 9. Vulkan pre-rotation and the ADPF target (session 4, 2026-09-29)
+**Pre-rotation.** Source: developer.android.com/games/optimize/vulkan-prerotation (fetched 2026-09-29).
+- **The rule:** set `preTransform = currentTransform` and keep `imageExtent` in the identity orientation (swap `currentExtent` for 90/270). Rotate the output in clip space and remap viewport and scissor.
+- **Detecting rotation:** Android 10+ reports a transform mismatch as `VK_SUBOPTIMAL_KHR` from `vkQueuePresentKHR`. The guide's viewport formulas:
+  - 90°: `{W - h - y, x, h, w}`
+  - 180°: `{W - w - x, H - h - y, w, h}`
+  - 270°: `{y, H - w - x, h, w}`
+- **Why we needed it:** our Android build forced IDENTITY and ignored the per-frame SUBOPTIMAL. On devices whose natural orientation is portrait (most phones), the compositor rotates every landscape frame.
+- **How we did it:**
+  - Only the final output is rotated: the output quad through a specialization constant, plus ImGui's draw data on the CPU. Game rendering is unaffected.
+  - The extent swap compares `currentExtent` with the window instead of trusting the orientation it reports.
+  - A mismatch (SUBOPTIMAL) triggers a surface query about once a second.
+- **To verify on devices:**
+  - Whether the Thor's panels are natively landscape; then the transform is IDENTITY and nothing changes.
+  - The AOSP `swapchain.cpp` details (`currentExtent` orientation). The GitHub mirror fetch was blocked by a tool failure on 2026-09-29, so re-check it.
+
+**ADPF target.** NDK 29 `android/performance_hint.h`: `APerformanceHint_updateTargetWorkDuration(session, int64_t)` (API 33).
+- **The problem:** we report frame intervals, so a 30 fps title measured against 16.7 ms always looked late and kept clocks high.
+- **The fix:** the target is now `16.67 ms × GX2SetSwapInterval` (1–4; 0 = vsync off counts as 1), and reports are capped at 4× the target.
+- **Limitation:** a title that paces itself to 30 fps but leaves the swap interval at 1 still gets the 60 fps target.
 
 ## Gap table
 Only facts verified from the sources above are marked. `✓` = has it, `–` = verified absent, `?` = not verified yet, `partial` = see notes.

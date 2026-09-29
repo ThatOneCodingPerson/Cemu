@@ -117,7 +117,7 @@ When you fix an entry, update its status here and tick the matching item in TODO
 ## P: performance (not crashes)
 | ID | Where | Item | Status |
 |---|---|---|---|
-| P1 | `SwapchainInfoVk.cpp:437-441` | `preTransform` is forced to IDENTITY, so the compositor rotates every frame. Honor `currentTransform` and rotate in the final blit (developer.android.com/games/optimize/vulkan-prerotation) | open |
+| P1 | `SwapchainInfoVk.cpp:437-441` | `preTransform` is forced to IDENTITY, so the compositor rotates every frame. Honor `currentTransform` and rotate in the final blit (developer.android.com/games/optimize/vulkan-prerotation) | in progress (session 4, behind a Graphics toggle) |
 | P2 | whole codebase | No ADPF, affinity or priority. Thor runs API 33, so `APerformanceHint` is available; load it at runtime (minSdk 30). TIDs are in `g_schedulerThreadIds` | fixed 76ac98f1 |
 | P3 | `Espresso/PPCTimer.cpp:34-83` | 3 s frequency estimate that launch blocks on; use `cntfrq_el0`. `_rdtscFrequency` is a data race. The `_addcarry_u64` shim (`precompiled.h:431`) drops the carry | fixed 76ac98f1 |
 | P4 | `BackendAArch64.cpp:1595-1608` | Functions with unsupported IML fall back to the interpreter. Profile per game (upstream work) | open |

@@ -120,7 +120,15 @@
 - **Long tasks** (install, compression): wrap them in `ForegroundTasks.begin(...)`/`end()` (a dataSync foreground service), and make them resumable after process death (see the `.installing`/`.backup` order in `InstallTitleUseCase`).
 - **Key cache:** `g_keyCache` is append-only (a deque) because `KeyCache_Reload` adds keys while the title scan reads them; never clear it outside `KeyCache_Prepare`.
 - **Controller profiles:** after `InputManager::load` replaces an emulated controller, call `EmulatedControllerManager::GetController(i).Reload()`, or later edits go to the discarded object.
-- **Android-only core additions** (overlay battery/thermal/frame time, KeyCache_Reload) sit behind `#if BOOST_PLAT_ANDROID` so desktop builds are unchanged.
+- **Android-only core additions** (overlay battery/thermal/frame time, KeyCache_Reload, `Latte_SetPrecompileOnly`, `FileCache_WaitForAsyncWrites`) sit behind `#if BOOST_PLAT_ANDROID` so desktop builds are unchanged.
+- **Save sync (custom data root):** every SAF import/export goes through `SaveSyncCoordinator`. It uses a process-local mutex plus the cross-process lock `noBackupFilesDir/save-sync.lock`; nothing runs on the main thread.
+  - A dirty mirror is the newest copy, and the startup sync exports it rather than importing over it. So `markSavesDirty` must wait for `awaitStartupSync()`.
+  - The process running a game holds `emulation-session.lock`; the other process checks `EmulationSessionState.isEmulationRunning(context)`.
+- **Shader compile-only mode** (`EXTRA_PRECOMPILE_SHADERS_ONLY`): the GPU thread stops after `LatteShaderCache_Load` and `g_isGPUInitFinished` stays false, so no game code runs.
+  - The session lock is still held, which stops the game list importing into caches that are open. There is no save sync.
+  - Quitting relies on `quitProcess` (`_exit`).
+- **Shader cache files:** never open an existing cache with `FileCache::Open(path, allowCreate=true, ...)` when the version might not match; it recreates (wipes) the file. Title check: `LatteShaderCache_get{Shader,Pipeline}CacheExtraVersion(titleId)`.
+- **`tr()` with arguments uses MessageFormat:** an apostrophe starts a quoted section, so "don't {0}" renders wrong. Reword so no apostrophe appears (plain `tr("text")` without args is fine).
 
 ## Conventions
 - **C++** (`CODING_STYLE.md`, `.clang-format`):
