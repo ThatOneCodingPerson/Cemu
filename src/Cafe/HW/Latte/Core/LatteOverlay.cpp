@@ -52,6 +52,44 @@ void LatteOverlay_pushNotification(const std::string& text, sint32 duration)
 	g_notifications.emplace_back(text, duration);
 }
 
+#if BOOST_PLAT_ANDROID
+// written by the app's UI thread, read while rendering
+struct
+{
+	std::atomic<sint32> batteryPercent{-1};
+	std::atomic_bool isCharging{false};
+	std::atomic<sint32> batteryTemperatureTenths{std::numeric_limits<sint32>::min()};
+	std::atomic<sint32> thermalStatus{-1};
+} s_deviceStatus;
+
+void LatteOverlay_setDeviceStatus(sint32 batteryPercent, bool isCharging, sint32 batteryTemperatureTenths, sint32 thermalStatus)
+{
+	s_deviceStatus.batteryPercent = batteryPercent;
+	s_deviceStatus.isCharging = isCharging;
+	s_deviceStatus.batteryTemperatureTenths = batteryTemperatureTenths;
+	s_deviceStatus.thermalStatus = thermalStatus;
+}
+
+static void LatteOverlay_renderDeviceStatus(const CemuConfig& config)
+{
+	const sint32 batteryPercent = s_deviceStatus.batteryPercent;
+	if (config.overlay.battery && batteryPercent >= 0)
+	{
+		const sint32 temperature = s_deviceStatus.batteryTemperatureTenths;
+		const char* charging = s_deviceStatus.isCharging ? " +" : "";
+		if (temperature != std::numeric_limits<sint32>::min())
+			ImGui::Text("Battery: %d%%%s %.1f C", batteryPercent, charging, temperature / 10.0f);
+		else
+			ImGui::Text("Battery: %d%%%s", batteryPercent, charging);
+	}
+	// PowerManager.THERMAL_STATUS_NONE..SHUTDOWN
+	static constexpr const char* kThermalStatusNames[] = {"none", "light", "moderate", "severe", "critical", "emergency", "shutdown"};
+	const sint32 thermalStatus = s_deviceStatus.thermalStatus;
+	if (config.overlay.thermal && thermalStatus >= 0 && thermalStatus < (sint32)std::size(kThermalStatusNames))
+		ImGui::Text("Thermal: %s", kThermalStatusNames[thermalStatus]);
+}
+#endif
+
 struct OverlayList
 {
 	std::wstring text;
@@ -76,7 +114,11 @@ void LatteOverlay_renderOverlay(ImVec2& position, ImVec2& pivot, sint32 directio
 	const ImVec4 color = ImGui::ColorConvertU32ToFloat4(config.overlay.text_color);
 	ImGui::PushStyleColor(ImGuiCol_Text, color);
 	// stats overlay
-	if (config.overlay.fps || config.overlay.drawcalls || config.overlay.cpu_usage || config.overlay.cpu_per_core_usage || config.overlay.ram_usage)
+	bool isStatsOverlayEnabled = config.overlay.fps || config.overlay.drawcalls || config.overlay.cpu_usage || config.overlay.cpu_per_core_usage || config.overlay.ram_usage;
+#if BOOST_PLAT_ANDROID
+	isStatsOverlayEnabled = isStatsOverlayEnabled || config.overlay.battery || config.overlay.thermal;
+#endif
+	if (isStatsOverlayEnabled)
 	{
 		ImGui::SetNextWindowPos(position, ImGuiCond_Always, pivot);
 		ImGui::SetNextWindowBgAlpha(kBackgroundAlpha);
@@ -104,6 +146,10 @@ void LatteOverlay_renderOverlay(ImVec2& position, ImVec2& pivot, sint32 directio
 
 			if(config.overlay.vram_usage && g_state.vramUsage != -1 && g_state.vramTotal != -1)
 				ImGui::Text("VRAM: %dMB / %dMB", g_state.vramUsage, g_state.vramTotal);
+
+#if BOOST_PLAT_ANDROID
+			LatteOverlay_renderDeviceStatus(config);
+#endif
 
 			if (config.overlay.debug)
 			{

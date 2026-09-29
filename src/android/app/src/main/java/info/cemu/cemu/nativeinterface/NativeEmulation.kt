@@ -105,6 +105,13 @@ object NativeEmulation {
         _screenshots.tryEmit(Screenshot(rgba, width, height))
     }
 
+    /**
+     * For the performance overlay: battery level in percent (-1 = unknown), temperature in 0.1 °C
+     * (Int.MIN_VALUE = unknown), PowerManager thermal status (-1 = unknown).
+     */
+    @JvmStatic
+    external fun setDeviceStatus(batteryPercent: Int, isCharging: Boolean, batteryTemperatureTenths: Int, thermalStatus: Int)
+
     object NfcTouchResult {
         const val SUCCESS: Int = 0
         const val NO_ACCESS: Int = 1

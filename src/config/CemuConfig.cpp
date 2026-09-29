@@ -161,6 +161,10 @@ XMLConfigParser CemuConfig::Load(XMLConfigParser& parser)
 		overlay.ram_usage = overlay_node.get("RAMUsage", false);
 		overlay.vram_usage = overlay_node.get("VRAMUsage", false);
 		overlay.debug = overlay_node.get("Debug", false);
+#if BOOST_PLAT_ANDROID
+		overlay.battery = overlay_node.get("Battery", false);
+		overlay.thermal = overlay_node.get("Thermal", false);
+#endif
 
 		notification.controller_profiles = overlay_node.get("ControllerProfiles", true);
 		notification.controller_battery = overlay_node.get("ControllerBattery", true);
@@ -394,6 +398,10 @@ XMLConfigParser CemuConfig::Save(XMLConfigParser& parser)
 	overlay_node.set("RAMUsage", overlay.ram_usage);
 	overlay_node.set("VRAMUsage", overlay.vram_usage);
 	overlay_node.set("Debug", overlay.debug);
+#if BOOST_PLAT_ANDROID
+	overlay_node.set("Battery", overlay.battery);
+	overlay_node.set("Thermal", overlay.thermal);
+#endif
 
 	auto notification_node = graphic.set("Notification");
 	notification_node.set("Position", notification.position);

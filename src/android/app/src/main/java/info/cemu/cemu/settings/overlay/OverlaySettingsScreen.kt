@@ -103,6 +103,18 @@ private fun OverlaySettings() {
         initialCheckedState = NativeSettings::isOverlayDebugEnabled,
         onCheckedChanged = NativeSettings::setOverlayDebugEnabled,
     )
+    Toggle(
+        label = tr("Battery"),
+        description = tr("Battery level and temperature of the device"),
+        initialCheckedState = NativeSettings::isOverlayBatteryEnabled,
+        onCheckedChanged = NativeSettings::setOverlayBatteryEnabled,
+    )
+    Toggle(
+        label = tr("Thermal status"),
+        description = tr("How much Android throttles the device because of heat (none, light, moderate, severe ...)"),
+        initialCheckedState = NativeSettings::isOverlayThermalEnabled,
+        onCheckedChanged = NativeSettings::setOverlayThermalEnabled,
+    )
 }
 
 @Composable

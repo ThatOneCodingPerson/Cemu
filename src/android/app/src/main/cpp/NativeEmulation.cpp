@@ -606,6 +606,12 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_requestScreenshot(JNIEnv* en
 	return true;
 }
 
+extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeEmulation_setDeviceStatus([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jint batteryPercent, jboolean isCharging, jint batteryTemperatureTenths, jint thermalStatus)
+{
+	LatteOverlay_setDeviceStatus(batteryPercent, isCharging, batteryTemperatureTenths, thermalStatus);
+}
+
 // the GamePad may be shown on another display with a different density (e.g. the AYN Thor's bottom screen)
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeEmulation_setPadDPI([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jfloat dpi)

@@ -78,6 +78,7 @@ private class InputDelegateManager(context: Context) {
 
 class EmulationActivity : AppCompatActivity() {
     private lateinit var inputManager: InputDelegateManager
+    private lateinit var deviceStatusMonitor: DeviceStatusMonitor
     private var processInputEvents = true
 
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {
@@ -126,6 +127,7 @@ class EmulationActivity : AppCompatActivity() {
         EmulationSessionState.onSessionStarted(this)
         DisplayUtils.init(this)
         inputManager = InputDelegateManager(this)
+        deviceStatusMonitor = DeviceStatusMonitor(this)
 
         setupHotkeys()
 
@@ -174,6 +176,7 @@ class EmulationActivity : AppCompatActivity() {
         super.onPause()
 
         inputManager.onPause()
+        deviceStatusMonitor.unregister()
         getSystemService(DisplayManager::class.java).unregisterDisplayListener(rotationListener)
         // key-up events of buttons held now may go elsewhere
         InputHandler.releaseAll()
@@ -184,6 +187,7 @@ class EmulationActivity : AppCompatActivity() {
         super.onResume()
 
         inputManager.onResume(display.rotation)
+        deviceStatusMonitor.register()
         getSystemService(DisplayManager::class.java).registerDisplayListener(rotationListener, null)
     }
 

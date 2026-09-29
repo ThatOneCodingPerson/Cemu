@@ -158,6 +158,18 @@ object NativeSettings {
     external fun setOverlayDebugEnabled(value: Boolean)
 
     @JvmStatic
+    external fun isOverlayBatteryEnabled(): Boolean
+
+    @JvmStatic
+    external fun setOverlayBatteryEnabled(value: Boolean)
+
+    @JvmStatic
+    external fun isOverlayThermalEnabled(): Boolean
+
+    @JvmStatic
+    external fun setOverlayThermalEnabled(value: Boolean)
+
+    @JvmStatic
     external fun getNotificationsPosition(): Int
 
     @JvmStatic

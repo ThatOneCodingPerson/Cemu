@@ -474,6 +474,10 @@ struct CemuConfig
 		bool ram_usage = false;
 		bool vram_usage = false;
 		bool debug = false;
+#if BOOST_PLAT_ANDROID
+		bool battery = false; // device battery level/temperature, reported by the app
+		bool thermal = false; // Android thermal status (throttling)
+#endif
 	} overlay{};
 
 	struct
