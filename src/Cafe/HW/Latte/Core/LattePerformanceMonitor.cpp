@@ -6,6 +6,9 @@ performanceMonitor_t performanceMonitor{};
 
 void LattePerformanceMonitor_frameEnd()
 {
+#if BOOST_PLAT_ANDROID
+	LatteOverlay_recordFrameTime();
+#endif
 	// per-frame stats
 	performanceMonitor.gpuTime_shaderCreate.frameFinished();
 	performanceMonitor.gpuTime_frameTime.frameFinished();

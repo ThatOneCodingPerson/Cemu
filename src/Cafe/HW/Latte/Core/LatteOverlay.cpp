@@ -70,6 +70,45 @@ void LatteOverlay_setDeviceStatus(sint32 batteryPercent, bool isCharging, sint32
 	s_deviceStatus.thermalStatus = thermalStatus;
 }
 
+// frame times in ms, written and read on the GPU thread only
+constexpr size_t kFrameTimeSampleCount = 120;
+struct
+{
+	std::array<float, kFrameTimeSampleCount> samples{};
+	size_t nextIndex = 0;
+	size_t count = 0;
+	std::chrono::steady_clock::time_point lastFrame{};
+} s_frameTimes;
+
+void LatteOverlay_recordFrameTime()
+{
+	const auto now = std::chrono::steady_clock::now();
+	if (s_frameTimes.lastFrame != std::chrono::steady_clock::time_point{})
+	{
+		s_frameTimes.samples[s_frameTimes.nextIndex] = std::chrono::duration<float, std::milli>(now - s_frameTimes.lastFrame).count();
+		s_frameTimes.nextIndex = (s_frameTimes.nextIndex + 1) % kFrameTimeSampleCount;
+		s_frameTimes.count = std::min(s_frameTimes.count + 1, kFrameTimeSampleCount);
+	}
+	s_frameTimes.lastFrame = now;
+}
+
+static void LatteOverlay_renderFrameTimeGraph()
+{
+	if (s_frameTimes.count < 2)
+		return;
+	float sum = 0.0f, maxFrameTime = 0.0f;
+	for (size_t i = 0; i < s_frameTimes.count; i++)
+	{
+		sum += s_frameTimes.samples[i];
+		maxFrameTime = std::max(maxFrameTime, s_frameTimes.samples[i]);
+	}
+	const std::string label = fmt::format("{:.1f} ms avg, {:.1f} max", sum / s_frameTimes.count, maxFrameTime);
+	// oldest sample first; a fixed 0-50 ms scale keeps 16.7/33.3 ms (60/30 FPS) at the same height
+	const size_t offset = s_frameTimes.count < kFrameTimeSampleCount ? 0 : s_frameTimes.nextIndex;
+	ImGui::PlotLines("##frametime", s_frameTimes.samples.data(), (int)s_frameTimes.count, (int)offset, label.c_str(), 0.0f, 50.0f,
+					 ImVec2(ImGui::GetFontSize() * 12.0f, ImGui::GetFontSize() * 3.0f));
+}
+
 static void LatteOverlay_renderDeviceStatus(const CemuConfig& config)
 {
 	const sint32 batteryPercent = s_deviceStatus.batteryPercent;
@@ -116,7 +155,7 @@ void LatteOverlay_renderOverlay(ImVec2& position, ImVec2& pivot, sint32 directio
 	// stats overlay
 	bool isStatsOverlayEnabled = config.overlay.fps || config.overlay.drawcalls || config.overlay.cpu_usage || config.overlay.cpu_per_core_usage || config.overlay.ram_usage;
 #if BOOST_PLAT_ANDROID
-	isStatsOverlayEnabled = isStatsOverlayEnabled || config.overlay.battery || config.overlay.thermal;
+	isStatsOverlayEnabled = isStatsOverlayEnabled || config.overlay.battery || config.overlay.thermal || config.overlay.frametime;
 #endif
 	if (isStatsOverlayEnabled)
 	{
@@ -149,6 +188,8 @@ void LatteOverlay_renderOverlay(ImVec2& position, ImVec2& pivot, sint32 directio
 
 #if BOOST_PLAT_ANDROID
 			LatteOverlay_renderDeviceStatus(config);
+			if (config.overlay.frametime)
+				LatteOverlay_renderFrameTimeGraph();
 #endif
 
 			if (config.overlay.debug)

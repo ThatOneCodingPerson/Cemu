@@ -104,6 +104,12 @@ private fun OverlaySettings() {
         onCheckedChanged = NativeSettings::setOverlayDebugEnabled,
     )
     Toggle(
+        label = tr("Frame time graph"),
+        description = tr("Time between the last 120 frames; spikes are stutters"),
+        initialCheckedState = NativeSettings::isOverlayFrameTimeEnabled,
+        onCheckedChanged = NativeSettings::setOverlayFrameTimeEnabled,
+    )
+    Toggle(
         label = tr("Battery"),
         description = tr("Battery level and temperature of the device"),
         initialCheckedState = NativeSettings::isOverlayBatteryEnabled,

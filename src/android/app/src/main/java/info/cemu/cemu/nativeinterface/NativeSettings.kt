@@ -170,6 +170,12 @@ object NativeSettings {
     external fun setOverlayThermalEnabled(value: Boolean)
 
     @JvmStatic
+    external fun isOverlayFrameTimeEnabled(): Boolean
+
+    @JvmStatic
+    external fun setOverlayFrameTimeEnabled(value: Boolean)
+
+    @JvmStatic
     external fun getNotificationsPosition(): Int
 
     @JvmStatic

@@ -164,6 +164,7 @@ XMLConfigParser CemuConfig::Load(XMLConfigParser& parser)
 #if BOOST_PLAT_ANDROID
 		overlay.battery = overlay_node.get("Battery", false);
 		overlay.thermal = overlay_node.get("Thermal", false);
+		overlay.frametime = overlay_node.get("FrameTime", false);
 #endif
 
 		notification.controller_profiles = overlay_node.get("ControllerProfiles", true);
@@ -401,6 +402,7 @@ XMLConfigParser CemuConfig::Save(XMLConfigParser& parser)
 #if BOOST_PLAT_ANDROID
 	overlay_node.set("Battery", overlay.battery);
 	overlay_node.set("Thermal", overlay.thermal);
+	overlay_node.set("FrameTime", overlay.frametime);
 #endif
 
 	auto notification_node = graphic.set("Notification");

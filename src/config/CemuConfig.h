@@ -477,6 +477,7 @@ struct CemuConfig
 #if BOOST_PLAT_ANDROID
 		bool battery = false; // device battery level/temperature, reported by the app
 		bool thermal = false; // Android thermal status (throttling)
+		bool frametime = false; // frame time graph
 #endif
 	} overlay{};
 
