@@ -16,7 +16,7 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 - **Session 4 (2026-09-29), working order** (the owner reprioritized: save states and graphics options first, the second screen last):
   1. [x] Commit the pending work: shader compile per game (706e1979), adaptive ADPF target (dbf60105).
   2. [x] Save states: feasibility write-up (#9, FEATURE_RESEARCH §10) (2026-09-29). **Owner decision needed:** port the Matt-Wood-23 branch as an experimental feature (yes/no, which games).
-  3. [ ] Graphics options (new, see "Graphics options" below): research, pre-rotation (P1), gamma, anisotropic filtering, a sharpening upscale filter, graphic packs per game.
+  3. [?] Graphics options (see "Graphics options" below): research, pre-rotation (P1), gamma, anisotropic filtering, AMD FSR 1 upscale filter (bc8d00b4), graphic packs per game (463bc6ab).
   4. [ ] Per-game overlay layouts (#5).
   5. [ ] Per vendor:product controller profiles (#2).
   6. [ ] Display picker, with a Settings entry (#4), at the lowest priority.
@@ -189,12 +189,12 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 - [?] ADPF performance hint session for the PPC and GPU threads, frame reports vs 16.67 ms (P2), 76ac98f1. Sustained-performance option: f1faa289.
 - [?] Adaptive ADPF target: target = 16.67 ms × the title's GX2SetSwapInterval (FEATURE_RESEARCH §9) (2026-09-29, dbf60105)
   - **Device test:** a 30 fps game (e.g. BotW, Xenoblade X) logs `ADPF: target frame time 33.3 ms` once in log.txt; a 60 fps game logs nothing extra. FPS the same as the previous APK.
-- [~] Vulkan pre-rotation (P1), session 4. Source: developer.android.com/games/optimize/vulkan-prerotation (fetched 2026-09-29).
+- [?] Vulkan pre-rotation (P1) (2026-09-29, bc8d00b4; device test in "Graphics options"). Source: developer.android.com/games/optimize/vulkan-prerotation and AOSP `libvulkan/swapchain.cpp` (both fetched 2026-09-29).
   - The swapchain's `preTransform` takes `currentTransform`, and the image is in the display's natural orientation.
   - The output quad rotates through specialization constant 0 in the output vertex shader, and the viewport is mapped (`SwapchainInfoVk::ToImageViewport`).
   - ImGui draw data is mapped on the CPU in `ImguiEnd`.
   - `VK_SUBOPTIMAL_KHR` means look at the transform again, about once a second.
-  - Off by default: Settings > Graphics > "Pre-rotate the picture (experimental)", Android only.
+  - Off by default: Settings > Graphics > "Pre-rotate the picture (experimental)", Android only. Stored as the native config value `vkPreRotation` (settings.xml), read when a swapchain is created.
 - [?] BotW fork path guarded (P6), 76ac98f1. P7 is wontfix (per-core CPU only, not exposed on Android)
 - [?] Pipeline compile thread priority (P9, a6d42c74)
 - **Device test:**
@@ -206,7 +206,7 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 - [x] Survey with sources: Eden (driver fetcher, ADPF, overrides), Azahar (auto-map, secondary display, save states, surface fixes), Dolphin, PPSSPP, NetherSX2, Vita3K, other Cemu Android forks (2026-09-28)
 - [x] Deep dives the owner asked for: controller auto-map (Azahar PR #1769), save states (cemu PR #953, issue #2062), Eden driver fetcher (repos, API, recommendation table)
 - [x] Gap table, implementation notes, prioritized backlog (below)
-- [ ] Fill the remaining `?` cells of the gap table (web search was rate-limited on 2026-09-28)
+- [~] Fill the remaining `?` cells of the gap table: rows for anisotropy and gamma added, and a few cells filled from the Eden/Dolphin settings files (2026-09-29). Azahar/PPSSPP/NetherSX2/Vita3K cells are still open; low priority
 
 ## Owner requests
 - [?] **Shader compilation per game** (requested 2026-09-29; 706e1979): "compile shaders for game X" so the full shader list is ready ahead of play. See FEATURE_RESEARCH.md §8 for how the caches work. A game's full list can't be read out of its files; it grows while playing, or comes from other players' caches.
@@ -243,12 +243,24 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 
 ## Graphics options (owner request, 2026-09-29)
 The owner asked for "graphical settings that can help improvements for games either more visually or for more performance". This is Vulkan only (see "Owner decisions" above). Research is in FEATURE_RESEARCH.md §11.
-- [ ] Research: what Eden, Dolphin and Azahar offer; which of Cemu's own options the Android UI doesn't expose; sources for a sharpening filter
-- [~] Vulkan pre-rotation (P1): finish the renderer part; a Graphics toggle
-- [ ] Gamma: override the game's gamma, display gamma / sRGB (core options without an Android UI)
-- [ ] Anisotropic filtering override
-- [ ] Sharpening upscale filter
-- [ ] "Graphic packs…" per game (resolution/FPS packs of that game)
+- [x] Research: Eden and Dolphin settings, Cemu's unexposed options, AMD FSR 1 (MIT), AOSP swapchain behaviour (2026-09-29, FEATURE_RESEARCH §11)
+- [?] Vulkan pre-rotation (P1): Settings > Graphics > "Pre-rotate the picture (experimental)" (2026-09-29, bc8d00b4)
+- [?] Gamma: target gamma, "Ignore the gamma of the game", display gamma or sRGB (bc8d00b4)
+- [?] Anisotropic filtering "At least 2x–16x" (bc8d00b4)
+- [?] Upscale filter "AMD FSR 1 (sharp edges)" (bc8d00b4)
+- [?] Long-press a game > "Graphic packs…": only that game's packs (463bc6ab)
+- **Device test** (log.txt is in `Android/data/info.cemu.cemu.dev/files/`):
+  - **Pre-rotation** on a phone (portrait-native), setting on, landscape game:
+    - log.txt shows `Vulkan: TV swapchain WxH, pre-rotation 90 degrees` (or 270).
+    - The picture, the FPS overlay, the input overlay and touch on the GamePad are all the right way up and in the right place.
+    - Flip the phone 180° mid-game: within about a second the log shows a new swapchain with the other angle, and the picture stays correct.
+    - Setting off: the log says 0 degrees, and everything is as before.
+    - On the Thor the log probably says 0 degrees (landscape panels), so nothing changes there.
+    - Compare FPS and battery drain with the setting on and off.
+  - **Gamma:** target gamma 1.8 vs 2.6 makes the picture visibly brighter/darker at the next game start. "The screen uses the sRGB curve" greys out the display gamma slider.
+  - **Anisotropic filtering** 16x: ground textures at a slant (roads, floors in BotW, MK8 tracks) are sharper in the distance than with "As the game requests". Menus and 2D art are unchanged.
+  - **AMD FSR 1:** with a game at 720p on a 1080p+ screen, edges look sharper than bilinear with no ringing. With a 1080p graphic pack on a smaller screen, nothing changes (it's downscaling).
+  - **Graphic packs…:** a game with community packs (download them first) lists its resolution/FPS packs. Enabling one and starting the game applies it. Back from a pack returns to the list, and a game without packs shows the hint.
 
 ## Feature backlog (from FEATURE_RESEARCH.md; each item becomes its own phase)
 1. [?] GPU driver fetcher (Eden-style): repo list, releases, download, install, GPU model plus recommendation (2026-09-28, e8efeb45)
@@ -325,7 +337,7 @@ The owner asked for "graphical settings that can help improvements for games eit
      - Scanning again from the list works; importing the same file again doesn't create a duplicate.
      - Delete works. A non-amiibo file gives "Not a valid amiibo or NFC file".
 9. [!] Save states: experimental, fork-only. Feasibility done (FEATURE_RESEARCH §10, 2026-09-29): feasible by porting github.com/Matt-Wood-23/Cemu/tree/savestates (MPL-2.0; MH3U verified on x64). Plan: A port (1 session), B Android UI (1 session), C device iteration (1–3 sessions). Blocked on the owner's go-ahead and choice of test games.
-10. [~] Vulkan pre-rotation (P1) and an adaptive ADPF target (session 4; see Phase 6 and "Graphics options"). ADPF target: dbf60105.
+10. [?] Vulkan pre-rotation (P1, bc8d00b4) and an adaptive ADPF target (dbf60105). See Phase 6 and "Graphics options".
 
 ## Housekeeping
 - [x] Deleted the stray `%TEMP%\k.txt` left by a planning agent (2026-09-28)

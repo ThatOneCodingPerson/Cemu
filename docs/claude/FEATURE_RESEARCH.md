@@ -278,7 +278,10 @@ Ours (76ac98f1) follows the same approach with one session.
   - A mismatch (SUBOPTIMAL) triggers a surface query about once a second.
 - **To verify on devices:**
   - Whether the Thor's panels are natively landscape; then the transform is IDENTITY and nothing changes.
-  - The AOSP `swapchain.cpp` details (`currentExtent` orientation). The GitHub mirror fetch was blocked by a tool failure on 2026-09-29, so re-check it.
+- **AOSP check** (android.googlesource.com `frameworks/native` main, `vulkan/libvulkan/swapchain.cpp`, fetched 2026-09-29; the old GitHub `aosp-mirror` repo now returns 404):
+  - `GetPhysicalDeviceSurfaceCapabilitiesKHR` sets `currentExtent` from `NATIVE_WINDOW_DEFAULT_WIDTH/HEIGHT`, which is the window's current orientation. The guide's swap for 90/270 is therefore right. Our code compares against the window instead, which gives the same result.
+  - `currentTransform` comes from `NATIVE_WINDOW_TRANSFORM_HINT`.
+  - `vkQueuePresentKHR` returns `VK_SUBOPTIMAL_KHR` only when the swapchain's `pre_transform` differs from the window's transform hint; extent changes don't cause it. With pre-rotation off, a rotated display therefore gets SUBOPTIMAL on every frame, which is why SUBOPTIMAL only triggers a cheap recheck here.
 
 **ADPF target.** NDK 29 `android/performance_hint.h`: `APerformanceHint_updateTargetWorkDuration(session, int64_t)` (API 33).
 - **The problem:** we report frame intervals, so a 30 fps title measured against 16.7 ms always looked late and kept clocks high.
@@ -394,12 +397,56 @@ The hard parts are already solved: the quiesce, fiber rebuild, HLE restart, AX a
 - loading an old state after an in-game save can confuse the game;
 - online sessions drop.
 
+## 11. Graphics options for looks and performance (owner request, session 4, 2026-09-29)
+The owner asked for "vulkan/openGL options and other graphical settings that can help improvements for games either more visually or for more performance".
+
+**OpenGL is not an option on Android.** `app/build.gradle.kts` passes `-DENABLE_OPENGL=OFF`, and Cemu's OpenGL backend targets desktop GL 4.5; Android has GLES only. Everything below is Vulkan.
+
+**What others expose** (read 2026-09-29):
+- **Eden**, from eden-emulator/mirror master, `IntSetting.kt`, `BooleanSetting.kt` and `res/values/arrays.xml` (GPL-3.0, so ideas only). Its Android settings include:
+  - resolution scale (`resolution_setup`) and `max_anisotropy`
+  - `scaling_filter`: nearest, bilinear, bicubic, gaussian, lanczos, ScaleForce, FSR (with an `fsr_sharpening_slider`), area, MMPX, and more, up to SGSR
+  - `anti_aliasing` (FXAA/SMAA), `pipeline_worker_count`, `frame_pacing_mode`, `async_presentation`, and frame generation
+- **Dolphin**, from dolphin-emu master, `IntSetting.kt` and `BooleanSetting.kt`:
+  - `GFX_EFB_SCALE` (internal resolution), `GFX_MSAA`
+  - `GFX_ENHANCE_MAX_ANISOTROPY`, `GFX_ENHANCE_FORCE_TEXTURE_FILTERING`
+  - colour correction (`GFX_CC_CORRECT_GAMMA`, colour space)
+  - `GFX_ENHANCE_DISABLE_COPY_FILTER`, `GFX_WIDESCREEN_HACK`
+
+**What Cemu can already do, and the Android gaps** (our core, 2026-09-29):
+- Resolution, FPS and most visual mods come through graphic packs; Cemu has no global render scale. The Android graphic packs screen was only a big tree with no way to jump to a game's packs.
+- The gamma options (`overrideAppGammaPreference`, `overrideGammaValue`, `userDisplayGamma`) exist in `CemuConfig` and are used by the output shader (`RendererOuputShader.cpp` FillUniformBlockBuffer, `ActiveSettings::GetTVGamma`), but only desktop has a UI for them.
+  - Target gamma is the TV gamma to reproduce; games can add an offset with GX2SetTVGamma, which "override" ignores.
+  - Display gamma 0 means the piecewise sRGB curve.
+- Anisotropy comes from the game's sampler registers, or from graphic-pack texture rules (`overwriteInfo.anisotropicLevel`). There is no global setting.
+- The upscale filter can be bilinear, bicubic, Hermite or nearest. Graphic packs can provide output shaders.
+- `gx2drawdone_sync` isn't worth exposing: Vulkan always forces the full sync (`GX2_Event.cpp` GX2DrawDone).
+
+**Built in session 4** (Android-only core additions behind `BOOST_PLAT_ANDROID`):
+1. Pre-rotation toggle (§9), now a native config value (`vkPreRotation`).
+2. Gamma section in Graphics settings: target gamma, ignore the game's gamma, display gamma or sRGB.
+3. Anisotropic filtering "at least 2x–16x" (`AnisotropicFilter`).
+   - It applies only to samplers that filter linearly with mipmaps and don't compare depth. Nearest-filtered textures (UI, pixel art) and shadow maps are left alone.
+   - It is clamped to `maxSamplerAnisotropy`, and graphic-pack rules still win.
+4. Upscale filter "AMD FSR 1": the EASU pass of FidelityFX FSR 1.
+   - Source: github.com/GPUOpen-Effects/FidelityFX-FSR `ffx_fsr1.h` v1.20210629 and the `ffx_a.h` helpers; MIT, with the notice kept in `RendererOuputShader.cpp`.
+   - It runs in the existing single output pass, using `textureGather` and `passUV`, never `gl_FragCoord`, so it works with pre-rotation.
+   - RCAS sharpening would need a second pass and is left out.
+   - Downscaling, or a shader that fails to compile, falls back to bilinear.
+5. "Graphic packs…" in a game's long-press menu opens only that game's packs (resolution, FPS, mods).
+
+**Candidates for later:**
+- FXAA as a post pass. It needs an intermediate target, or a combined FXAA-and-scale output shader.
+- A pipeline compile thread count (Eden's "Vulkan workers"); ours is min(8, cores−1) at background priority (P9).
+- RCAS sharpening with a strength slider.
+- Letting graphic-pack presets change while a game runs. Cemu needs a restart for most packs.
+
 ## Gap table
 Only facts verified from the sources above are marked. `✓` = has it, `–` = verified absent, `?` = not verified yet, `partial` = see notes.
 
 | Feature | Ours (0.5.x) | Eden | Azahar | Dolphin | PPSSPP | NetherSX2 | Vita3K |
 |---|---|---|---|---|---|---|---|
-| In-app GPU driver *download* | – | ✓ | ? | ? | ? | ? | ? |
+| In-app GPU driver *download* | ✓ (e8efeb45) | ✓ | ? | ? | ? | ? | ? |
 | Custom driver install from zip | ✓ | ✓ | ? | ? | ? | ? | ✓ |
 | Per-game driver | ✓ | ✓ (per-game settings) | ? | ? | ? | ? | ? |
 | Per-game settings (broad) | partial (CPU mode, thread quantum, shader precision, shared libs, driver) | ✓ | ? | ✓ | ✓ | ✓ | partial |
@@ -407,14 +454,16 @@ Only facts verified from the sources above are marked. `✓` = has it, `–` = v
 | Controller auto-map | – | ? | ✓ ("press A" layout detect) | ? | ? | ? | ? |
 | Save states | – | ? | ✓ | ✓ | ✓ | ✓ | ? |
 | Secondary display (dual screen) | ✓ (basic) | n/a | ✓ (layouts + picker) | n/a | n/a | n/a | n/a |
-| Performance overlay | ✓ (FPS, CPU, RAM, draw calls) | ✓ (FPS, frametime, CPU/GPU) | ? | ? | ? | ? | ? |
-| Post-processing shaders | partial (upscale/downscale filter) | ✓ (2026-09 nightly) | ? | ? | ✓ | ? | ? |
+| Performance overlay | ✓ (FPS, CPU, RAM, draw calls, battery/thermal, frame time graph) | ✓ (FPS, frametime, CPU/GPU) | ? | ✓ (FPS, speed, frame times, graphs) | ? | ? | ? |
+| Post-processing shaders | partial (upscale filters incl. AMD FSR 1, graphic-pack output shaders) | ✓ (2026-09 nightly; FSR, ScaleForce, Lanczos, SGSR…) | ? | ? | ✓ | ? | ? |
+| Anisotropic filtering override | ✓ (session 4) | ✓ (`max_anisotropy`) | ? | ✓ (`GFX_ENHANCE_MAX_ANISOTROPY`) | ? | ? | ? |
+| Gamma / colour correction | ✓ (session 4: target/display gamma) | ? | ? | ✓ (`GFX_CC_*`) | ? | ? | ? |
 | Resolution scaling | via graphic packs | ✓ | ✓ | ✓ | ✓ (up to 10×) | ✓ | ? |
-| Fast-forward / speed | – | ? | ? | ? | ✓ | ✓ | ? |
+| Fast-forward / speed | – | partial (`use_speed_limit` off) | ? | ? | ✓ | ✓ | ? |
 | RetroAchievements | n/a (Wii U unsupported by RA) | – | – | ✓ (dev builds) | ✓ | ? | – |
-| Cheats | via graphic-pack patches | ? | ? | ✓ (AR/Gecko) | ✓ | ✓ | ? |
+| Cheats | via graphic-pack patches | ? | ? | ✓ (AR/Gecko, `MAIN_ENABLE_CHEATS`) | ✓ | ✓ | ? |
 
-**Sources:** the sections above. Also Dolphin (androidauthority.com 2503 update; retroachievements.org forum topic 33323), PPSSPP (ppsspp.org; 1.20 in March 2026 added native DualSense support and portrait mode), NetherSX2 (netherx2.org), and Vita3K (heldgames.com guide; it clears the shader cache when the driver changes). All read 2026-09-28.
+**Sources:** the sections above; the Eden and Dolphin settings files of §11 (read 2026-09-29) for the rows added in session 4. Also Dolphin (androidauthority.com 2503 update; retroachievements.org forum topic 33323), PPSSPP (ppsspp.org; 1.20 in March 2026 added native DualSense support and portrait mode), NetherSX2 (netherx2.org), and Vita3K (heldgames.com guide; it clears the shader cache when the driver changes). All read 2026-09-28.
 
 ## Prioritized backlog → TODO.md
 Ordered by value to the owner divided by cost. Each item becomes its own phase with the usual build → device test → tick loop, and each needs a short re-check of the sources above before starting.
