@@ -29,8 +29,18 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
        - Enable motion, trigger an activity recreation (e.g. multi-window/resize if possible): motion still works.
        - Overlay edit > resize: follows the finger smoothly and still resizes at the screen edge.
        - A layout saved on one device/screen size shows every button on screen on another.
-  3. Next: K13 (title install as a foreground task), P9 (pipeline compiler threads), P1 (pre-rotation).
+  3. [?] P9 pipeline compile threads at background priority (a6d42c74). [?] K13 install/compression kept alive by a foreground service + interrupted-install recovery (6d877933).
+     - **Device test:**
+       - Install a title from the title manager, press Home during the copy:
+         - A "Installing title" notification with progress shows, if notifications are allowed for Cemu Dev; otherwise it's in the task manager.
+         - The install finishes in the background.
+       - Force-stop Cemu Dev mid-install, reopen:
+         - No broken title in the list.
+         - Updating an installed title and killing it midway brings the old version back.
+       - The same for WUA compression (notification plus completion).
+       - In a shader-heavy area, compare stutter and FPS with the previous APK (P9).
   4. Backlog #4, dual-screen polish, then #5 per-game controller profiles (also covers the auto-map follow-up).
+  5. P1 pre-rotation: engine work (the final blit and ImGui both need rotating); measure on a portrait-native phone first.
 
 ---
 
