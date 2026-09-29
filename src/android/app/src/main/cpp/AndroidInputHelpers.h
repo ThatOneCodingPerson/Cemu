@@ -29,6 +29,14 @@ class EmulatedControllerManager
 
 	std::map<uint64, std::string> GetMappings() const;
 
+	// Controller model profiles (the app copies mappings between devices of the same model):
+	// uuids (Android input device descriptors) of the Android controllers that have a mapping
+	std::vector<std::string> GetMappedAndroidControllerUuids() const;
+	// mapping id -> button of the mappings to the Android controller with this uuid
+	std::map<uint64, uint64> GetMappingButtons(std::string_view uuid) const;
+	// replaces all mappings and Android controllers with these mappings to one controller
+	void ReplaceAndroidMappings(ControllerPtr controller, const std::map<uint64, uint64>& buttons);
+
 	void SetDisabled();
 
 	EmulatedControllerPtr GetControllerPtr() const;

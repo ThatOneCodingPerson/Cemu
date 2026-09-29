@@ -317,6 +317,51 @@ Java_info_cemu_cemu_nativeinterface_NativeInput_getControllerMappings(JNIEnv* en
 	return hashMapObj;
 }
 
+// Controller model profiles: the app remembers a model's mappings (vendor:product) and applies them to another
+// device of that model, whose descriptor differs.
+
+extern "C" [[maybe_unused]] JNIEXPORT jobjectArray JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeInput_getControllerMappedDescriptors(JNIEnv* env, [[maybe_unused]] jclass clazz, jint index)
+{
+	std::vector<std::string> uuids;
+	JNIUtils::HandleNativeException(env, [&]() { uuids = EmulatedControllerManager::GetController(index).GetMappedAndroidControllerUuids(); });
+	return JNIUtils::CreateStringObjectArray(env, uuids);
+}
+
+// {mapping id, button, mapping id, button, ...} of the mappings to the device with this descriptor
+extern "C" [[maybe_unused]] JNIEXPORT jlongArray JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeInput_getControllerMappingButtons(JNIEnv* env, [[maybe_unused]] jclass clazz, jint index, jstring descriptor)
+{
+	std::vector<jlong> pairs;
+	JNIUtils::HandleNativeException(env, [&]() {
+		for (const auto& [mapping, button] : EmulatedControllerManager::GetController(index).GetMappingButtons(JNIUtils::FromJString(env, descriptor)))
+		{
+			pairs.emplace_back((jlong)mapping);
+			pairs.emplace_back((jlong)button);
+		}
+	});
+	jlongArray array = env->NewLongArray((jsize)pairs.size());
+	if (array)
+		env->SetLongArrayRegion(array, 0, (jsize)pairs.size(), pairs.data());
+	return array;
+}
+
+// Replaces all mappings of the emulated controller (and its Android devices) with these, to one device
+extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeInput_applyControllerMappings(JNIEnv* env, [[maybe_unused]] jclass clazz, jint index, jstring descriptor, jstring name, jlongArray mappingButtonPairs)
+{
+	JNIUtils::HandleNativeException(env, [&]() {
+		const jsize length = env->GetArrayLength(mappingButtonPairs);
+		std::vector<jlong> values(length);
+		env->GetLongArrayRegion(mappingButtonPairs, 0, length, values.data());
+		std::map<uint64, uint64> buttons;
+		for (jsize i = 0; i + 1 < length; i += 2)
+			buttons[(uint64)values[i]] = (uint64)values[i + 1];
+		auto controller = ControllerFactory::CreateController(InputAPI::Android, JNIUtils::FromJString(env, descriptor), JNIUtils::FromJString(env, name));
+		EmulatedControllerManager::GetController(index).ReplaceAndroidMappings(controller, buttons);
+	});
+}
+
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeInput_onTouchDown([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jint x, jint y, jboolean isTV)
 {

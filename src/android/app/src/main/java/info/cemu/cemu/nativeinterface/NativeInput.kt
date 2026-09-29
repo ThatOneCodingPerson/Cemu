@@ -235,6 +235,21 @@ object NativeInput {
     @JvmStatic
     external fun getControllerMappings(index: Int): Map<Int, String>
 
+    /** Descriptors of the input devices that have mappings on emulated controller [index]. */
+    @JvmStatic
+    external fun getControllerMappedDescriptors(index: Int): Array<String>
+
+    /** {mapping id, button, mapping id, button, …} of controller [index]'s mappings to the device [descriptor]. */
+    @JvmStatic
+    external fun getControllerMappingButtons(index: Int, descriptor: String): LongArray
+
+    /**
+     * Replaces all mappings (and mapped devices) of controller [index] with [mappingButtonPairs] (as returned by
+     * [getControllerMappingButtons]) to the device [descriptor].
+     */
+    @JvmStatic
+    external fun applyControllerMappings(index: Int, descriptor: String, name: String, mappingButtonPairs: LongArray)
+
     @JvmStatic
     external fun onTouchDown(x: Int, y: Int, isTV: Boolean)
 

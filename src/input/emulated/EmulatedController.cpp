@@ -336,6 +336,16 @@ std::shared_ptr<ControllerBase> EmulatedController::get_mapping_controller(uint6
 	return {};
 }
 
+#if BOOST_PLAT_ANDROID
+std::optional<uint64> EmulatedController::get_mapping_button(uint64 mapping) const
+{
+	const auto it = m_mappings.find(mapping);
+	if (it == m_mappings.cend() || it->second.controller.expired())
+		return std::nullopt;
+	return it->second.button;
+}
+#endif
+
 void EmulatedController::delete_mapping(uint64 mapping)
 {
 	m_mappings.erase(mapping);

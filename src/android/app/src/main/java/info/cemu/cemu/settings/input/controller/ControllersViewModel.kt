@@ -11,6 +11,7 @@ import info.cemu.cemu.common.android.inputdevice.hasMotion
 import info.cemu.cemu.common.android.inputdevice.hasRumble
 import info.cemu.cemu.common.android.inputdevice.listGameControllers
 import info.cemu.cemu.common.android.inputdevice.toControllerInfo
+import info.cemu.cemu.common.input.ControllerModelProfiles
 import info.cemu.cemu.common.input.InputMapper
 import info.cemu.cemu.common.input.getNativeButtonsForControllerType
 import info.cemu.cemu.nativeinterface.NativeInput
@@ -176,6 +177,8 @@ class ControllersViewModel(val controllerIndex: Int) : ViewModel() {
 
     fun save() {
         NativeInput.saveInputs()
+        // the mappings become the layout of the connected devices' models
+        ControllerModelProfiles.record(controllerIndex)
     }
 
     private val _controllerProfiles = MutableStateFlow<List<String>>(emptyList())

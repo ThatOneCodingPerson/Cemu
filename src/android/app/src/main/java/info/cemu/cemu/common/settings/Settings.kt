@@ -81,6 +81,21 @@ data class AppSettings(
     val hotkeySettings: Map<HotkeyAction, HotkeyCombo> = emptyMap(),
     /** Map a connected controller to controller 1 while that has no mappings (ControllerAutoMapper). */
     val isControllerAutoMapEnabled: Boolean = true,
+    /**
+     * The mappings last used with each controller model, by "vendor:product:emulated controller type"
+     * (ControllerModelProfiles). Written by the main process only.
+     */
+    val controllerModelProfiles: Map<String, ControllerModelProfile> = emptyMap(),
+    /** The model ("vendor:product") of each input device seen when recording, by its descriptor. */
+    val knownControllerModels: Map<String, String> = emptyMap(),
+)
+
+@Serializable
+data class ControllerModelProfile(
+    /** mapping id to button, as NativeInput.getControllerMappingButtons returns them */
+    val buttons: Map<Long, Long> = emptyMap(),
+    /** the device the mappings were recorded from, for messages */
+    val deviceName: String = "",
 )
 
 object AppSettingsSerializer : Serializer<AppSettings> {

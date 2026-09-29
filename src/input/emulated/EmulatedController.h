@@ -77,6 +77,11 @@ public:
 	bool is_mapping_down(uint64 mapping) const;
 	std::string get_mapping_name(uint64 mapping) const;
 	std::shared_ptr<ControllerBase> get_mapping_controller(uint64 mapping) const;
+#if BOOST_PLAT_ANDROID
+	// the mapped button of a mapping whose controller still exists; the app copies mappings between devices of the
+	// same model with it (controller model profiles)
+	std::optional<uint64> get_mapping_button(uint64 mapping) const;
+#endif
 	void delete_mapping(uint64 mapping);
 	void clear_mappings();
 	void set_mapping(uint64 mapping, const std::shared_ptr<ControllerBase>& controller_base, uint64 button);

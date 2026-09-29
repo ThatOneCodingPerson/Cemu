@@ -127,13 +127,17 @@ class MainActivity : AppCompatActivity() {
     // a connected controller works without setup, see ControllerAutoMapper
     private fun autoConfigureControllers() {
         lifecycleScope.launch {
-            val isAutoMapEnabled = AppSettingsStore.dataStore.data.first().isControllerAutoMapEnabled
-            val mappedControllerName = ControllerAutoMapper.autoConfigure(isAutoMapEnabled) ?: return@launch
-            Toast.makeText(
-                this@MainActivity,
-                tr("\"{0}\" was mapped to controller 1. Change it in the input settings.", mappedControllerName),
-                Toast.LENGTH_LONG,
-            ).show()
+            val settings = AppSettingsStore.dataStore.data.first()
+            val message = when (val result = ControllerAutoMapper.autoConfigure(settings.isControllerAutoMapEnabled, settings)) {
+                is ControllerAutoMapper.Result.Mapped ->
+                    tr("\"{0}\" was mapped to controller 1. Change it in the input settings.", result.deviceName)
+
+                is ControllerAutoMapper.Result.ProfileApplied ->
+                    tr("Controller 1 now uses \"{0}\" with the layout last used for this model.", result.deviceName)
+
+                null -> return@launch
+            }
+            Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
         }
     }
 }
