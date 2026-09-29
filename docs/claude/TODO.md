@@ -18,12 +18,13 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
   2. [?] Backlog #1, the GPU driver fetcher (e8efeb45).
   3. [?] Backlog #3, hotkeys (1c18255f).
   4. [?] Backlog #2, auto-map (8e9a5094).
+- **Owner feedback (session 3 start, 2026-09-28):** "so far it's doing pretty great". Testing on their own devices went well, and no specific regressions were reported. Items stay `[?]` until confirmed individually. The owner asked to keep working through the list.
 - **Blocked on the owner:**
   - Device tests: the Thor has no USB debugging. It was still MTP only at the end of session 2; `adb devices` is empty.
   - The D1/D2 save-sync design decision (see Phase 3).
 - **Next session, in order:**
   1. If a device is attached: install, walk the `[?]` device-test lists (newest first), pull logs, fix regressions.
-  2. SAF path encoding (Phase 3), then K13/K16/K17/K27 and P1/P4/P9.
+  2. [?] SAF path encoding (9e51a7b8). Next: K13/K16/K17/K27 and P1/P4/P9.
   3. Backlog #4, dual-screen polish, then #5 per-game controller profiles (also covers the auto-map follow-up).
 
 ---
@@ -94,7 +95,10 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 - [?] JNI `CheckAndClearException` after every native→Kotlin call; NativeFiles never throws; `isFile` fixed (A10)
 - [?] Persistent JNI worker pool replaces per-call threads in `FiberSafeJNICall` (A11)
 - [?] UTF-8 conversion via UTF-16 (emoji-safe), null-safe (N13)
-- [ ] SAF path percent-decoding with a round-trip design (names containing `:`, spaces, unicode). Needs research and tests on the device.
+- [?] SAF path percent-decoding with a round-trip design (names containing `:`, spaces, unicode) (2026-09-28, 9e51a7b8, K30)
+  - **Device test:**
+    - A games folder containing a game folder named e.g. `Zelda: BotW #1` (extracted code/content/meta) and a `.wua` with a space and non-Latin characters in its name. Both show in the list and launch.
+    - A game that was already listed before updating still launches, and so do its old home screen shortcut and title manager deletion (old paths are still read).
 - [?] Manifest `configChanges` (A12); missing launch path handled (A15, partial); relaunch while running attaches to the running title (K2)
 - [?] Pipeline cache: atomic write, flush on quit (2 s max), save on pause (A13)
 - [?] Data files: hash written last, cross-process file lock (A14)

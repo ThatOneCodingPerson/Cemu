@@ -100,6 +100,7 @@ When you fix an entry, update its status here and tick the matching item in TODO
 | K26 | M | `AndroidManifest.xml:15-18` | `allowBackup=true` with empty rules; keys, otp and seeprom can be backed up | fixed c27e208b (cloud backup = DataStore + shared prefs only) |
 | K27 | L | `InputOverlaySurfaceView.kt:520-534,438-442` | Resize barely responds; `requestFocus()` is called on every layout | open |
 | K28 | H | first run, `InputManager::load` + `EmulatedControllerManager` | Fresh install: no controller profile, so emulated controller 1 doesn't exist. Neither a gamepad nor the input overlay does anything until controller 1 is set up by hand | fixed 8e9a5094 (`ControllerAutoMapper`: controller 1 becomes a GamePad when none is configured; a connected gamepad is mapped). Found by reading code, not reproduced on a device |
+| K30 | M | `nativeinterface/NativeFiles.kt` `toNativePath`/`fromNativePath` | SAF native paths decoded `%2F` only after the last `%3A`: games got percent-encoded names from directory listings; a `:` in a name broke `filename()`/`parent_path()`; a `#`/`?` in a name appended by native code became a URI fragment or query | fixed 9e51a7b8 (plain document id after `/document/`, lenient decoder accepts old paths; `SafNativePathTests`) |
 | K29 | L | `emulation/EmulationScreen.kt` | The second-screen snackbar and the pad surfaces could appear behind the error dialog after a failed launch (`isEmulationInitialized` also means "finished with error") | fixed 08ddc021 |
 
 ## B: build and packaging
