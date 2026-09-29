@@ -11,6 +11,12 @@ import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -22,7 +28,9 @@ import info.cemu.cemu.common.android.display.DisplayUtils
 import info.cemu.cemu.common.android.inputevent.isFromPhysicalController
 import info.cemu.cemu.common.emulation.EmulationSessionState
 import info.cemu.cemu.common.settings.AppSettingsStore
+import info.cemu.cemu.common.storage.SaveSyncCoordinator
 import info.cemu.cemu.common.ui.components.ActivityContent
+import info.cemu.cemu.common.ui.components.SaveSyncOverlay
 import info.cemu.cemu.common.ui.localization.TranslatableContent
 import info.cemu.cemu.common.ui.localization.tr
 import info.cemu.cemu.emulation.input.ControllerCallbacks
@@ -36,6 +44,7 @@ import info.cemu.cemu.nativeinterface.NativeEmulation
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 private class InputDelegateManager(context: Context) {
     private val nativeInputDeviceListener = NativeInputDeviceListener(context)
@@ -125,6 +134,12 @@ class EmulationActivity : AppCompatActivity() {
         }
         val gamePath = runningGamePath ?: requestedGamePath
 
+        // started from a home screen shortcut without the main process: sync the saves before the game runs.
+        // From the game list the main process already did (EXTRA_SAVES_SYNCED)
+        val needsStartupSync = !intent.getBooleanExtra(EXTRA_SAVES_SYNCED, false) && runningGamePath == null
+        if (needsStartupSync) {
+            SaveSyncCoordinator.startStartupSync(this)
+        }
         EmulationSessionState.onSessionStarted(this)
         DisplayUtils.init(this)
         inputManager = InputDelegateManager(this)
@@ -140,18 +155,29 @@ class EmulationActivity : AppCompatActivity() {
         setContent {
             TranslatableContent {
                 ActivityContent {
-                    EmulationScreen(
-                        gamePath = gamePath,
-                        setMotionSensorEnabled = inputManager::setDeviceMotionEnabled,
-                        onQuit = ::onQuit,
-                        setInputListeningEnabled = { enabled ->
-                            processInputEvents = enabled
-                            if (!enabled) {
-                                // key-ups aren't forwarded anymore, don't leave buttons held
-                                InputHandler.releaseAll()
-                            }
-                        },
-                    )
+                    var isStartupSyncDone by remember { mutableStateOf(!needsStartupSync) }
+                    LaunchedEffect(Unit) {
+                        SaveSyncCoordinator.awaitStartupSync()
+                        isStartupSyncDone = true
+                    }
+                    Box {
+                        if (isStartupSyncDone) {
+                            EmulationScreen(
+                                gamePath = gamePath,
+                                setMotionSensorEnabled = inputManager::setDeviceMotionEnabled,
+                                onQuit = ::onQuit,
+                                setInputListeningEnabled = { enabled ->
+                                    processInputEvents = enabled
+                                    if (!enabled) {
+                                        // key-ups aren't forwarded anymore, don't leave buttons held
+                                        InputHandler.releaseAll()
+                                    }
+                                },
+                            )
+                        }
+                        // the startup sync and the export when quitting
+                        SaveSyncOverlay()
+                    }
                 }
             }
         }
@@ -245,14 +271,30 @@ class EmulationActivity : AppCompatActivity() {
         controller.hide(WindowInsetsCompat.Type.systemBars())
     }
 
+    private var isQuitting = false
+
     private fun onQuit() {
-        EmulationSessionState.syncSavesToCustomRoot(this)
-        finish()
-        // not exitProcess(): exit() runs native static destructors while emulation threads still run (crash)
-        NativeEmulation.quitProcess()
+        if (isQuitting) {
+            return
+        }
+        isQuitting = true
+        // no more save writes during the export
+        NativeEmulation.pauseTitle()
+        lifecycleScope.launch {
+            // off the main thread with the "Saving…" overlay (D2). If it takes too long the mirror stays dirty and
+            // the next start exports it, nothing is lost
+            withTimeoutOrNull(QUIT_SAVE_SYNC_TIMEOUT_MS) {
+                EmulationSessionState.finishSession(this@EmulationActivity)
+            }
+            finish()
+            // not exitProcess(): exit() runs native static destructors while emulation threads still run (crash)
+            NativeEmulation.quitProcess()
+        }
     }
 
     companion object {
         const val EXTRA_LAUNCH_PATH: String = BuildConfig.APPLICATION_ID + ".LaunchPath"
+        const val EXTRA_SAVES_SYNCED: String = BuildConfig.APPLICATION_ID + ".SavesSynced"
+        private const val QUIT_SAVE_SYNC_TIMEOUT_MS = 60_000L
     }
 }

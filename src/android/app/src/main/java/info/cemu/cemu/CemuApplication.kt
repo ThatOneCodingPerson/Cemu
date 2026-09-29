@@ -5,7 +5,7 @@ import android.app.Activity
 import android.os.Bundle
 import android.util.Log
 import info.cemu.cemu.common.settings.AppSettingsStore
-import info.cemu.cemu.common.storage.CemuSaveSyncManager
+import info.cemu.cemu.common.storage.SaveSyncCoordinator
 import info.cemu.cemu.common.storage.CemuDataStorage
 import info.cemu.cemu.common.ui.localization.setLanguage
 import info.cemu.cemu.common.ui.localization.setTranslations
@@ -155,7 +155,8 @@ class CemuApplication : Application() {
     }
 
     private fun initializeCemu() {
-        cemuUserFolder = runBlocking { CemuDataStorage.prepareActiveRoot(this@CemuApplication) }
+        // only resolves the folder; the custom root's saves are synced in the background (SaveSyncCoordinator, D1)
+        cemuUserFolder = runBlocking { CemuDataStorage.resolveActiveRoot(this@CemuApplication) }
         CemuDataStorage.setActiveRoot(cemuUserFolder)
 
         val displayMetrics = resources.displayMetrics
@@ -183,10 +184,12 @@ class CemuApplication : Application() {
         }
 
         override fun onActivityStopped(activity: Activity) {
+            // the app went to the background: export pending save changes, unless a game (possibly in the
+            // emulation process) still writes them; its own session exports when it ends
             if (startedActivities.updateAndGet { (it - 1).coerceAtLeast(0) } == 0 &&
-                !EmulationSessionState.isEmulationRunning
+                !EmulationSessionState.isEmulationRunning(activity)
             ) {
-                CemuSaveSyncManager.flushNow(activity.applicationContext)
+                SaveSyncCoordinator.flushInBackground(activity.applicationContext)
             }
         }
 

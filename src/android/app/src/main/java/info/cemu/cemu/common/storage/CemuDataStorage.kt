@@ -77,8 +77,12 @@ object CemuDataStorage {
 
     fun saveRoot(root: File): File = root.resolve(SAVE_RELATIVE_PATH)
 
-    suspend fun prepareActiveRoot(context: Context): File = withContext(Dispatchers.IO) {
-        var storageSettings = AppSettingsStore.dataStore.data.first().storageSettings
+    /**
+     * The root native code works in. With a custom root this is the local mirror; it doesn't touch the custom root
+     * (SAF), [syncAtStartup] does that separately (D1: this runs during Application.onCreate).
+     */
+    suspend fun resolveActiveRoot(context: Context): File = withContext(Dispatchers.IO) {
+        val storageSettings = AppSettingsStore.dataStore.data.first().storageSettings
         val customRootUri = storageSettings.customRootUri
         if (customRootUri.isNullOrBlank()) {
             return@withContext resolveCurrentRoot(context, storageSettings)
@@ -104,21 +108,32 @@ object CemuDataStorage {
                     )
                 )
             }
-            storageSettings = storageSettings.copy(
-                mirrorRootPath = mirrorRoot.absolutePath,
-                isSaveMirrorDirty = migratedDirty,
-            )
         }
 
+        mirrorRoot
+    }
+
+    /**
+     * Brings the mirror and the custom root together before any game runs: a dirty mirror has changes the custom
+     * root doesn't (a session that couldn't finish its export), so it's exported; otherwise the custom root's saves
+     * are imported. Slow (SAF): call it off the main thread, see SaveSyncCoordinator.
+     */
+    suspend fun syncAtStartup(context: Context) = withContext(Dispatchers.IO) {
+        val storageSettings = AppSettingsStore.dataStore.data.first().storageSettings
+        val customRootUri = storageSettings.customRootUri
+        if (customRootUri.isNullOrBlank()) {
+            return@withContext
+        }
         val documentRoot = documentRootOrNull(context, customRootUri)
         if (documentRoot == null) {
             setLastStorageError("Custom root is not available. Cemu is using the local mirror until SAF access returns.")
-            return@withContext mirrorRoot
+            return@withContext
         }
         cleanupDocumentScratchDirectories(documentRoot)
 
         runCatching {
-            if (storageSettings.isSaveMirrorDirty) {
+            @Suppress("DEPRECATION")
+            if (storageSettings.isSaveMirrorDirty || storageSettings.isMirrorDirty) {
                 syncSavesToCustomRoot(context, force = true)
             } else {
                 importSavesFromCustomRoot(context)
@@ -128,9 +143,9 @@ object CemuDataStorage {
                 throwable.message ?: "Save sync failed. Cemu is using the local mirror."
             )
         }
-
-        mirrorRoot
     }
+
+    fun hasCustomRoot(storageSettings: StorageSettings) = !storageSettings.customRootUri.isNullOrBlank()
 
     suspend fun migrateToCustomRoot(
         context: Context,

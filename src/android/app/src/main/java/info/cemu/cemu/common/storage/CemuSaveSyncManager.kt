@@ -10,7 +10,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
@@ -31,12 +31,13 @@ object CemuSaveSyncManager {
     private var observer: RecursiveSaveObserver? = null
     private var flushJob: Job? = null
 
-    fun start(context: Context) {
+    /** Watches the mirror's saves while a game runs and exports changes (debounced). Not on the main thread. */
+    suspend fun start(context: Context) {
+        val settings = AppSettingsStore.dataStore.data.first().storageSettings
         synchronized(this) {
             val applicationContext = context.applicationContext
             observer?.stopWatching()
 
-            val settings = runBlocking { AppSettingsStore.dataStore.data.first().storageSettings }
             if (settings.customRootUri.isNullOrBlank()) {
                 observer = null
                 return
@@ -52,15 +53,16 @@ object CemuSaveSyncManager {
         }
     }
 
-    fun stopAndFlush(context: Context): Boolean {
+    /** Stops watching; the caller then exports with SaveSyncCoordinator.flush. */
+    fun stop() {
         synchronized(this) {
             observer?.stopWatching()
             observer = null
         }
-        return flushNow(context)
     }
 
-    fun flushNow(context: Context): Boolean {
+    /** Exports pending changes (or everything if the mirror is dirty). Call through SaveSyncCoordinator. */
+    suspend fun flush(context: Context): Boolean {
         val (paths, keepDirtyAfterFlush) = synchronized(this) {
             flushJob?.cancel()
             flushJob = null
@@ -69,10 +71,10 @@ object CemuSaveSyncManager {
             snapshot to (observer != null)
         }
 
-        return runBlocking(Dispatchers.IO) {
+        return withContext(Dispatchers.IO) {
             val storageSettings = AppSettingsStore.dataStore.data.first().storageSettings
             if (paths.isEmpty() && !storageSettings.isSaveMirrorDirty) {
-                return@runBlocking true
+                return@withContext true
             }
             if (paths.isNotEmpty()) {
                 CemuDataStorage.markSavesDirty(context.applicationContext)
@@ -110,11 +112,13 @@ object CemuSaveSyncManager {
                     snapshot
                 }
                 if (paths.isNotEmpty()) {
-                    CemuDataStorage.exportSaveChangesToCustomRoot(
-                        context = context.applicationContext,
-                        changedSaveRelativePaths = paths,
-                        clearDirty = false,
-                    )
+                    SaveSyncCoordinator.runQuietly(context) {
+                        CemuDataStorage.exportSaveChangesToCustomRoot(
+                            context = it,
+                            changedSaveRelativePaths = paths,
+                            clearDirty = false,
+                        )
+                    }
                 }
             }
         }

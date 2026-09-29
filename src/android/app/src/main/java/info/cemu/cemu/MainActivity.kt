@@ -15,6 +15,7 @@ import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -27,6 +28,8 @@ import info.cemu.cemu.common.input.ControllerAutoMapper
 import info.cemu.cemu.common.input.GamepadInputSource
 import info.cemu.cemu.common.input.InputDeviceListener
 import info.cemu.cemu.common.settings.AppSettingsStore
+import info.cemu.cemu.common.storage.SaveSyncCoordinator
+import info.cemu.cemu.common.ui.components.SaveSyncOverlay
 import info.cemu.cemu.common.ui.components.ActivityContent
 import info.cemu.cemu.common.ui.localization.TranslatableContent
 import info.cemu.cemu.common.ui.localization.tr
@@ -73,6 +76,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // once per process; SaveSyncOverlay holds the UI (and game launches) back while it runs
+        SaveSyncCoordinator.startStartupSync(this)
         // a title install killed with the process leaves a partial title (and the old one as backup)
         lifecycleScope.launch(Dispatchers.IO) {
             if (InstallTitleUseCase.recoverInterruptedInstalls(Path(NativeActiveSettings.getMLCPath())))
@@ -81,7 +86,10 @@ class MainActivity : AppCompatActivity() {
         setContent {
             TranslatableContent {
                 ActivityContent {
-                    MainNav()
+                    Box {
+                        MainNav()
+                        SaveSyncOverlay()
+                    }
                 }
             }
         }
@@ -166,9 +174,15 @@ private fun createIntentForGame(context: Context, game: Game): Intent {
 }
 
 private fun startGame(context: Context, game: Game) {
+    if (SaveSyncCoordinator.isSyncing) {
+        Toast.makeText(context, tr("Wait until the saves are synced"), Toast.LENGTH_SHORT).show()
+        return
+    }
     NativeSettings.saveSettings()
 
     val intent = createIntentForGame(context, game)
+    // this process synced the saves at start; the emulation process doesn't have to again
+    intent.putExtra(EmulationActivity.EXTRA_SAVES_SYNCED, true)
     context.startActivity(intent)
 }
 

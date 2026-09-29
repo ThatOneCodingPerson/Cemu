@@ -3,38 +3,96 @@ package info.cemu.cemu.common.emulation
 import android.content.Context
 import info.cemu.cemu.common.storage.CemuDataStorage
 import info.cemu.cemu.common.storage.CemuSaveSyncManager
+import info.cemu.cemu.common.storage.SaveSyncCoordinator
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import java.io.File
+import java.io.IOException
+import java.io.RandomAccessFile
+import java.nio.channels.FileChannel
+import java.nio.channels.FileLock
+import java.nio.channels.OverlappingFileLockException
 import java.util.concurrent.atomic.AtomicInteger
 
+/**
+ * Game sessions and their save sync. Nothing here blocks the main thread (D2); exports run through
+ * SaveSyncCoordinator.
+ */
 object EmulationSessionState {
     private val activeSessions = AtomicInteger(0)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    val isEmulationRunning: Boolean
-        get() = activeSessions.get() > 0
+    // held by the process running a game, so the other process can see it (D7)
+    private var sessionLockChannel: FileChannel? = null
+    private var sessionLock: FileLock? = null
 
-    fun onSessionStarted(context: Context) {
-        runBlocking {
-            CemuDataStorage.markSavesDirty(context.applicationContext)
+    private fun sessionLockFile(context: Context) = File(context.noBackupFilesDir, "emulation-session.lock")
+
+    /** True while a game runs in this process or in the emulation process. */
+    fun isEmulationRunning(context: Context): Boolean {
+        if (activeSessions.get() > 0)
+            return true
+        return try {
+            RandomAccessFile(sessionLockFile(context), "rw").channel.use { channel ->
+                val lock = channel.tryLock() ?: return true
+                lock.release()
+                false
+            }
+        } catch (_: OverlappingFileLockException) {
+            true
+        } catch (_: IOException) {
+            false
         }
-        CemuSaveSyncManager.start(context.applicationContext)
-        activeSessions.incrementAndGet()
     }
 
+    fun onSessionStarted(context: Context) {
+        val applicationContext = context.applicationContext
+        if (activeSessions.incrementAndGet() == 1)
+            acquireSessionLock(applicationContext)
+        scope.launch {
+            // after this process's startup sync: a dirty mirror would make it export instead of import
+            SaveSyncCoordinator.awaitStartupSync()
+            CemuDataStorage.markSavesDirty(applicationContext)
+            CemuSaveSyncManager.start(applicationContext)
+        }
+    }
+
+    /** Exports the session's save changes and waits for it; for quitting with a progress dialog. */
+    suspend fun finishSession(context: Context): Boolean {
+        CemuSaveSyncManager.stop()
+        return SaveSyncCoordinator.flush(context)
+    }
+
+    /** The activity went away without quitting: export in the background (kept alive by a foreground service). */
     fun onSessionStopped(context: Context) {
         val remainingSessions = activeSessions.updateAndGet { count -> (count - 1).coerceAtLeast(0) }
         if (remainingSessions == 0) {
-            syncSavesToCustomRoot(context)
+            releaseSessionLock()
+            CemuSaveSyncManager.stop()
+            SaveSyncCoordinator.flushInBackground(context)
         }
     }
 
-    fun syncSavesToCustomRoot(context: Context) {
-        CemuSaveSyncManager.stopAndFlush(context.applicationContext)
-        runBlocking {
-            withContext(Dispatchers.IO) {
-                CemuDataStorage.syncSavesToCustomRoot(context.applicationContext)
-            }
+    // a small local file, fast enough for the main thread
+    private fun acquireSessionLock(context: Context) {
+        try {
+            val channel = RandomAccessFile(sessionLockFile(context), "rw").channel
+            sessionLock = channel.tryLock()
+            sessionLockChannel = channel
+        } catch (_: Exception) {
+            // only used to inform the other process
         }
+    }
+
+    private fun releaseSessionLock() {
+        try {
+            sessionLock?.release()
+            sessionLockChannel?.close()
+        } catch (_: IOException) {
+        }
+        sessionLock = null
+        sessionLockChannel = null
     }
 }

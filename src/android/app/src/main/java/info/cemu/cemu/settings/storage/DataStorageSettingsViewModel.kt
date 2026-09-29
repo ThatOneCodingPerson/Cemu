@@ -6,7 +6,7 @@ import androidx.lifecycle.viewModelScope
 import info.cemu.cemu.common.settings.AppSettings
 import info.cemu.cemu.common.settings.AppSettingsStore
 import info.cemu.cemu.common.storage.CemuDataStorage
-import info.cemu.cemu.common.storage.CemuSaveSyncManager
+import info.cemu.cemu.common.storage.SaveSyncCoordinator
 import info.cemu.cemu.common.emulation.EmulationSessionState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -81,11 +81,9 @@ class DataStorageSettingsViewModel(application: Application) : AndroidViewModel(
                     message = null,
                 )
             }
-            val synced = if (EmulationSessionState.isEmulationRunning) {
-                CemuSaveSyncManager.flushNow(appContext)
-            } else {
-                CemuDataStorage.syncSavesToCustomRoot(appContext, force = true)
-            }
+            val synced = SaveSyncCoordinator.runQuietly(appContext) {
+                CemuDataStorage.syncSavesToCustomRoot(it, force = true)
+            } ?: true
             _uiState.update {
                 it.copy(
                     isWorking = false,
@@ -248,7 +246,7 @@ class DataStorageSettingsViewModel(application: Application) : AndroidViewModel(
     }
 
     private fun ensureNoEmulation(errorMessage: String): Boolean {
-        if (!EmulationSessionState.isEmulationRunning) {
+        if (!EmulationSessionState.isEmulationRunning(appContext)) {
             return true
         }
 
@@ -304,7 +302,7 @@ class DataStorageSettingsViewModel(application: Application) : AndroidViewModel(
                 },
                 lastSaveSync = formatTimestamp(settings.lastSaveSyncAtMillis),
                 lastManualSync = formatTimestamp(settings.lastManualSyncAtMillis),
-                isEmulationRunning = EmulationSessionState.isEmulationRunning,
+                isEmulationRunning = EmulationSessionState.isEmulationRunning(appContext),
                 error = settings.lastStorageError ?: it.error,
             )
         }
