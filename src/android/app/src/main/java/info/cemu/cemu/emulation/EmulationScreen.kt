@@ -168,6 +168,11 @@ fun EmulationScreen(
         NativeEmulation.setSwapScreens(sideMenuState.areScreensSwapped)
     }
 
+    // from the state, so a recreated activity (new motion handler, same view model) listens again
+    LaunchedEffect(sideMenuState.isMotionEnabled) {
+        setMotionSensorEnabled(sideMenuState.isMotionEnabled)
+    }
+
     LaunchedEffect(sideMenuState.isExternalScreenRotatedLeft) {
         NativeEmulation.setExternalScreenRotatedLeft(sideMenuState.isExternalScreenRotatedLeft)
     }
@@ -237,7 +242,6 @@ fun EmulationScreen(
                         },
                         updateState = {
                             viewModel.updateSideMenuState(it)
-                            setMotionSensorEnabled(it.isMotionEnabled)
                             NativeEmulation.setReplaceTVWithPadView(it.isTVReplacedWithPad)
                             closeDrawer()
                         },
