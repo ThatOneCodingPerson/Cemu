@@ -9,6 +9,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
+import info.cemu.cemu.common.ui.extensions.navigateBackSafely
 import info.cemu.cemu.games.details.GameDetailsScreen
 import info.cemu.cemu.games.list.GamesListScreen
 import info.cemu.cemu.games.profile.GameProfileEditScreen
@@ -38,7 +39,7 @@ private inline fun <reified T : Any> NavGraphBuilder.composableGameScreen(
         val game = viewModel<GameViewModel>(previousBackStackEntry).game
 
         LaunchedEffect(game) {
-            if (game == null) navController.popBackStack()
+            if (game == null) navController.navigateBackSafely()
         }
 
         if (game == null) return@composable
@@ -80,13 +81,13 @@ fun NavGraphBuilder.gamesNavigation(
         composableGameScreen<GameListRoutes.GameDetailsRoute>(navController) { game ->
             GameDetailsScreen(
                 game = game,
-                navigateBack = { navController.popBackStack() },
+                navigateBack = { navController.navigateBackSafely() },
             )
         }
         composableGameScreen<GameListRoutes.GameProfileEditRoute>(navController) { game ->
             GameProfileEditScreen(
                 game = game,
-                navigateBack = { navController.popBackStack() },
+                navigateBack = { navController.navigateBackSafely() },
             )
         }
     }

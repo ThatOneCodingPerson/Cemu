@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 
 class GamesListViewModel : ViewModel() {
     private var gamePaths = NativeSettings.getGamesPaths().toSet()
@@ -38,11 +39,11 @@ class GamesListViewModel : ViewModel() {
     )
 
     init {
+        // called from the native loader thread: update atomically, a read-modify-write of .value loses games
         NativeGameTitles.setGameTitleLoadedCallback(NativeGameTitles.GameTitleLoadedCallback { game: Game ->
-            if (_games.value.any { it.titleId == game.titleId || it.path == game.path })
-                return@GameTitleLoadedCallback
-
-            _games.value += game
+            _games.update { games ->
+                if (games.any { it.titleId == game.titleId || it.path == game.path }) games else games + game
+            }
         })
         refreshGames()
     }

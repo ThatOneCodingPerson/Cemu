@@ -83,6 +83,8 @@ class AccountsViewModel : ViewModel() {
 
         NativeSettings.setAccountPersistentId(persistentId)
         activeAccountPersistentId.value = persistentId
+        // the network service is stored per account
+        activeAccountNetworkService.value = NativeSettings.getAccountNetworkService(persistentId)
     }
 
     fun setNetworkServiceForActiveAccount(networkService: Int) {
@@ -96,8 +98,13 @@ class AccountsViewModel : ViewModel() {
         }
 
         NativeAccount.deleteAccount(activeAccountPersistentId.value)
-        activeAccountPersistentId.value = accounts.value.first().persistentId
         refreshAccountList()
+        // pick from the refreshed list (the old one still contains the deleted account) and store it in the config,
+        // which would otherwise keep pointing at the deleted account
+        val newActivePersistentId = accounts.value.firstOrNull()?.persistentId ?: return
+        NativeSettings.setAccountPersistentId(newActivePersistentId)
+        activeAccountPersistentId.value = newActivePersistentId
+        activeAccountNetworkService.value = NativeSettings.getAccountNetworkService(newActivePersistentId)
     }
 
 

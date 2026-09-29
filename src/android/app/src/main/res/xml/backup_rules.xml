@@ -1,13 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older that API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+   Backup rules for Android 11 and lower (data_extraction_rules.xml is used on Android 12+).
+   See https://developer.android.com/identity/data/autobackup
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <!-- only the app settings; the Cemu folder holds console keys and possibly gigabytes of titles -->
+    <include domain="file" path="datastore/" />
+    <include domain="sharedpref" path="." />
 </full-backup-content>

@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlin.io.path.Path
 import kotlin.io.path.relativeToOrNull
 
@@ -100,13 +101,14 @@ class TitleListViewModel : ViewModel() {
             addTitle(titleData.toTitleEntry(isPathInMLC(titleData.path)))
         }
 
+        // called from native threads: update atomically, a read-modify-write of .value loses entries
         override fun onTitleRemoved(locationUID: Long) {
-            _titleEntries.value =
-                _titleEntries.value.toMutableList()
-                    .apply {
-                        val index = indexOfFirst { it.locationUID == locationUID }
-                        if (index >= 0) removeAt(index)
-                    }
+            _titleEntries.update { entries ->
+                entries.toMutableList().apply {
+                    val index = indexOfFirst { it.locationUID == locationUID }
+                    if (index >= 0) removeAt(index)
+                }
+            }
         }
     }
 
@@ -134,8 +136,9 @@ class TitleListViewModel : ViewModel() {
     }
 
     private fun addTitle(titleEntry: TitleEntry) {
-        if (_titleEntries.value.any { it.locationUID == titleEntry.locationUID }) return
-        _titleEntries.value += titleEntry
+        _titleEntries.update { entries ->
+            if (entries.any { it.locationUID == titleEntry.locationUID }) entries else entries + titleEntry
+        }
     }
 
     private val _titleToBeDeleted = MutableStateFlow<TitleEntry?>(null)
@@ -158,8 +161,10 @@ class TitleListViewModel : ViewModel() {
             titleEntry = titleEntry,
             callback = { result ->
                 if (result == DeleteResult.FINISHED) {
-                    _titleEntries.value = _titleEntries.value.filterNot {
-                        it.locationUID == titleEntry.locationUID && it.path == titleEntry.path
+                    _titleEntries.update { entries ->
+                        entries.filterNot {
+                            it.locationUID == titleEntry.locationUID && it.path == titleEntry.path
+                        }
                     }
                 }
 
@@ -227,7 +232,9 @@ class TitleListViewModel : ViewModel() {
             titleId = titleEntry.titleId,
             selectedUID = titleEntry.locationUID,
             titlesCallback = { titleId ->
-                titleEntries.value.filter { it.titleId == titleId }
+                // all entries, not the filtered/searched ones: otherwise updates and DLC hidden by the
+                // current filter would silently be left out of the WUA
+                _titleEntries.value.filter { it.titleId == titleId }
                     .map { Title(it.version, it.locationUID) }
                     .toTypedArray()
             })

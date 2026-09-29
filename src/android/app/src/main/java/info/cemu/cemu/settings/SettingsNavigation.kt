@@ -5,6 +5,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.toRoute
+import info.cemu.cemu.common.ui.extensions.navigateBackSafely
 import info.cemu.cemu.settings.account.AccountSettingsScreen
 import info.cemu.cemu.settings.audio.AudioSettingsScreen
 import info.cemu.cemu.settings.customdrivers.CustomDriversScreen
@@ -81,7 +82,7 @@ fun NavGraphBuilder.settingsNavigation(navController: NavHostController) {
     navigation<SettingsRoute>(startDestination = SettingsRoutes.SettingsHomeScreenRoute) {
         composable<SettingsRoutes.SettingsHomeScreenRoute> {
             SettingsHomeScreen(
-                navigateBack = { navController.popBackStack() },
+                navigateBack = { navController.navigateBackSafely() },
                 goToGeneralSettings = { navController.navigate(SettingsRoutes.GeneralSettings) },
                 goToInputSettings = { navController.navigate(SettingsRoutes.InputSettingsRoute) },
                 goToGraphicsSettings = { navController.navigate(SettingsRoutes.GraphicsSettingsScreenRoute) },
@@ -93,12 +94,12 @@ fun NavGraphBuilder.settingsNavigation(navController: NavHostController) {
         }
         composable<SettingsRoutes.AudioSettingsScreenRoute> {
             AudioSettingsScreen(
-                navigateBack = { navController.popBackStack() },
+                navigateBack = { navController.navigateBackSafely() },
             )
         }
         composable<SettingsRoutes.GraphicsSettingsScreenRoute> {
             GraphicsSettingsScreen(
-                navigateBack = { navController.popBackStack() },
+                navigateBack = { navController.navigateBackSafely() },
                 goToCustomDriversSettings = {
                     navController.navigate(SettingsRoutes.CustomDriversScreenRoute)
                 }
@@ -106,17 +107,17 @@ fun NavGraphBuilder.settingsNavigation(navController: NavHostController) {
         }
         composable<SettingsRoutes.CustomDriversScreenRoute> {
             CustomDriversScreen(
-                navigateBack = { navController.popBackStack() },
+                navigateBack = { navController.navigateBackSafely() },
             )
         }
         composable<SettingsRoutes.OverlaySettingsScreenRoute> {
             OverlaySettingsScreen(
-                navigateBack = { navController.popBackStack() },
+                navigateBack = { navController.navigateBackSafely() },
             )
         }
         composable<SettingsRoutes.EmulatedUSBDevicesSettingsScreenRoute> {
             EmulatedUSBDevicesSettingsScreen(
-                navigateBack = { navController.popBackStack() },
+                navigateBack = { navController.navigateBackSafely() },
             )
         }
         navigation<SettingsRoutes.InputSettingsRoute>(startDestination = SettingsRoutes.InputSettingsScreenRoute) {
@@ -124,32 +125,32 @@ fun NavGraphBuilder.settingsNavigation(navController: NavHostController) {
                 val controllerIndex =
                     navBackStackEntry.toRoute<SettingsRoutes.ControllerInputSettingsScreenRoute>().index
                 ControllerInputSettingsScreen(
-                    navigateBack = { navController.popBackStack() },
+                    navigateBack = { navController.navigateBackSafely() },
                     controllerIndex = controllerIndex,
                 )
             }
 
             composable<SettingsRoutes.HotkeySettingsScreenRoute> {
                 HotkeySettingsScreen(
-                    navigateBack = { navController.popBackStack() }
+                    navigateBack = { navController.navigateBackSafely() }
                 )
             }
 
             composable<SettingsRoutes.InputOverlaySettingsScreenRoute> {
                 InputOverlaySettingsScreen(
-                    navigateBack = { navController.popBackStack() }
+                    navigateBack = { navController.navigateBackSafely() }
                 )
             }
 
             composable<SettingsRoutes.DeviceInputSettingsScreenRoute> {
                 DeviceInputSettingsScreen(
-                    navigateBack = { navController.popBackStack() }
+                    navigateBack = { navController.navigateBackSafely() }
                 )
             }
 
             composable<SettingsRoutes.InputSettingsScreenRoute> {
                 InputSettingsScreen(
-                    navigateBack = { navController.popBackStack() },
+                    navigateBack = { navController.navigateBackSafely() },
                     goToHotkeySettings = {
                         navController.navigate(SettingsRoutes.HotkeySettingsScreenRoute)
                     },
@@ -172,26 +173,26 @@ fun NavGraphBuilder.settingsNavigation(navController: NavHostController) {
         navigation<SettingsRoutes.GeneralSettings>(startDestination = SettingsRoutes.GeneralSettingsScreenRoute) {
             composable<SettingsRoutes.GeneralSettingsScreenRoute> {
                 GeneralSettingsScreen(
-                    navigateBack = { navController.popBackStack() },
+                    navigateBack = { navController.navigateBackSafely() },
                     goToGamePathsSettings = { navController.navigate(SettingsRoutes.GamePathsScreenRoute) },
                     goToDataStorageSettings = { navController.navigate(SettingsRoutes.DataStorageSettingsScreenRoute) },
                 )
             }
             composable<SettingsRoutes.GamePathsScreenRoute> {
                 GamePathsScreen(
-                    navigateBack = { navController.popBackStack() },
+                    navigateBack = { navController.navigateBackSafely() },
                 )
             }
             composable<SettingsRoutes.DataStorageSettingsScreenRoute> {
                 DataStorageSettingsScreen(
-                    navigateBack = { navController.popBackStack() },
+                    navigateBack = { navController.navigateBackSafely() },
                 )
             }
         }
 
         composable<SettingsRoutes.AccountSettingsScreenRoute> {
             AccountSettingsScreen(
-                navigateBack = { navController.popBackStack() },
+                navigateBack = { navController.navigateBackSafely() },
             )
         }
     }
