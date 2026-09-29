@@ -6,6 +6,7 @@
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
 #include "Cafe/OS/libs/nfc/nfc.h"
+#include "Cemu/FileCache/FileCache.h"
 #include "Cafe/OS/libs/snd_core/ax.h"
 #include "Cafe/TitleList/TitleId.h"
 #include "Cafe/TitleList/TitleList.h"
@@ -525,6 +526,30 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_resumeTitle([[maybe_unused]]
 	CafeSystem::ResumeTitle();
 }
 
+namespace NativeEmulation
+{
+	JNIUtils::Scopedjclass s_precompileCallbackClass;
+	jmethodID s_onShaderPrecompileFinishedMethod = nullptr;
+} // namespace NativeEmulation
+
+// "Compile shaders" mode: set before launchTitle. The GPU thread compiles the title's caches and then stops; the game
+// never runs. NativeEmulation.onShaderPrecompileFinished(titleId) is called when it's done.
+extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeEmulation_setPrecompileShadersOnly(JNIEnv* env, jclass clazz)
+{
+	NativeEmulation::s_precompileCallbackClass = JNIUtils::Scopedjclass(clazz);
+	NativeEmulation::s_onShaderPrecompileFinishedMethod = env->GetStaticMethodID(clazz, "onShaderPrecompileFinished", "(J)V");
+	if (JNIUtils::CheckAndClearException(env) || NativeEmulation::s_onShaderPrecompileFinishedMethod == nullptr)
+		return;
+	Latte_SetPrecompileOnly([]() {
+		const jlong titleId = (jlong)CafeSystem::GetForegroundTitleId();
+		JNIUtils::RunOnJNIWorker([titleId](JNIEnv* env) {
+			env->CallStaticVoidMethod(*NativeEmulation::s_precompileCallbackClass, NativeEmulation::s_onShaderPrecompileFinishedMethod, titleId);
+			JNIUtils::CheckAndClearException(env);
+		});
+	});
+}
+
 // Touches an NFC tag (amiibo) file to the emulated reader, like desktop Cemu's "Scan NFC tag from file". The game
 // may write the tag back to the file, so it must be writable (not a SAF document). Returns 0,
 // NFC_TOUCH_TAG_ERROR_NO_ACCESS, NFC_TOUCH_TAG_ERROR_INVALID_FILE_FORMAT, or -1 if no title runs.
@@ -628,6 +653,9 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_quitProcess([[maybe_unused]]
 	// otherwise pipelines compiled since the last periodic save are lost (stutter on the next launch)
 	if (g_renderer && CafeSystem::IsTitleRunning() && !VulkanRenderer::GetInstance()->FlushPipelineCache(std::chrono::seconds(2)))
 		cemuLog_log(LogType::Force, "Pipeline cache is busy, not saved on quit");
+	// shaders and pipelines found since the last write would be missing from the transferable caches
+	if (!FileCache_WaitForAsyncWrites(std::chrono::seconds(2)))
+		cemuLog_log(LogType::Force, "Shader cache writes still pending on quit");
 	cemuLog_waitForFlush();
 	fflush(nullptr);
 	_exit(0);

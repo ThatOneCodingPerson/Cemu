@@ -47,10 +47,13 @@ object EmulationSessionState {
         }
     }
 
-    fun onSessionStarted(context: Context) {
+    /** [syncSaves] false: no game code runs (shader compiling), only the other process has to know about it. */
+    fun onSessionStarted(context: Context, syncSaves: Boolean = true) {
         val applicationContext = context.applicationContext
         if (activeSessions.incrementAndGet() == 1)
             acquireSessionLock(applicationContext)
+        if (!syncSaves)
+            return
         scope.launch {
             // after this process's startup sync: a dirty mirror would make it export instead of import
             SaveSyncCoordinator.awaitStartupSync()
@@ -66,10 +69,12 @@ object EmulationSessionState {
     }
 
     /** The activity went away without quitting: export in the background (kept alive by a foreground service). */
-    fun onSessionStopped(context: Context) {
+    fun onSessionStopped(context: Context, syncSaves: Boolean = true) {
         val remainingSessions = activeSessions.updateAndGet { count -> (count - 1).coerceAtLeast(0) }
         if (remainingSessions == 0) {
             releaseSessionLock()
+            if (!syncSaves)
+                return
             CemuSaveSyncManager.stop()
             SaveSyncCoordinator.flushInBackground(context)
         }

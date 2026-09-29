@@ -53,6 +53,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -84,11 +85,15 @@ import info.cemu.cemu.emulation.inputoverlay.InputOverlaySurfaceView.InputMode.D
 import info.cemu.cemu.emulation.inputoverlay.InputOverlaySurfaceView.InputMode.EDIT_POSITION
 import info.cemu.cemu.emulation.inputoverlay.InputOverlaySurfaceView.InputMode.EDIT_SIZE
 import info.cemu.cemu.nativeinterface.NativeEmulation
+import info.cemu.cemu.nativeinterface.NativeShaderCache
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun EmulationScreen(
     gamePath: String,
+    isPrecompileShadersOnly: Boolean,
     setMotionSensorEnabled: (Boolean) -> Unit,
     setInputListeningEnabled: (Boolean) -> Unit,
     onQuit: () -> Unit,
@@ -313,6 +318,17 @@ fun EmulationScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        if (isPrecompileShadersOnly) {
+            Text(
+                text = tr("Compiling shaders only, the game will not start"),
+                color = Color.White,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(16.dp)
+                    .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+        }
         if (isPausedByUser) {
             Text(
                 text = tr("Paused"),
@@ -334,6 +350,11 @@ fun EmulationScreen(
 
     emulationError?.let {
         EmulationErrorDialog(it, onQuit)
+    }
+
+    val precompiledTitleId by NativeEmulation.shaderPrecompileFinished.collectAsState()
+    if (isPrecompileShadersOnly && emulationError == null) {
+        precompiledTitleId?.let { ShaderPrecompileFinishedDialog(it, onQuit) }
     }
 
     if (showAmiiboDialog) {
@@ -800,6 +821,33 @@ private fun EmulationLoadingDialog() {
         title = { Text(tr("Initializing emulation")) },
         text = { LinearProgressIndicator(modifier = Modifier.fillMaxWidth()) },
         confirmButton = {},
+        onDismissRequest = {},
+    )
+}
+
+@Composable
+private fun ShaderPrecompileFinishedDialog(titleId: Long, onQuit: () -> Unit) {
+    // reads the cache files, not on the main thread
+    val cacheInfo by produceState<NativeShaderCache.CacheInfo?>(null, titleId) {
+        value = withContext(Dispatchers.IO) { NativeShaderCache.getInfo(titleId) }
+    }
+    AlertDialog(
+        title = { Text(tr("Shaders compiled")) },
+        text = {
+            val info = cacheInfo
+            Text(
+                if (info == null) {
+                    tr("The shader cache of this game is compiled for the current GPU driver.")
+                } else {
+                    tr(
+                        "Compiled {0} shaders and {1} pipelines for the current GPU driver. The game starts faster and stutters less on the next launch. After changing the driver, compile again.",
+                        info.shaderCount.coerceAtLeast(0),
+                        info.pipelineCount.coerceAtLeast(0),
+                    )
+                }
+            )
+        },
+        confirmButton = { TextButton(onClick = onQuit) { Text(tr("Done")) } },
         onDismissRequest = {},
     )
 }

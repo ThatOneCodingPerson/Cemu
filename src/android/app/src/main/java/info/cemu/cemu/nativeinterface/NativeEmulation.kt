@@ -4,7 +4,9 @@ import android.view.Surface
 import androidx.annotation.Keep
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 object NativeEmulation {
     @JvmStatic
@@ -111,6 +113,23 @@ object NativeEmulation {
      */
     @JvmStatic
     external fun setDeviceStatus(batteryPercent: Int, isCharging: Boolean, batteryTemperatureTenths: Int, thermalStatus: Int)
+
+    /**
+     * "Compile shaders" mode, before the title launches: the GPU thread compiles the title's shader and pipeline
+     * caches for the current driver and stops; the game never runs. [shaderPrecompileFinished] then has the title id.
+     */
+    @JvmStatic
+    external fun setPrecompileShadersOnly()
+
+    private val _shaderPrecompileFinished = MutableStateFlow<Long?>(null)
+    val shaderPrecompileFinished = _shaderPrecompileFinished.asStateFlow()
+
+    @Keep
+    @JvmStatic
+    @Suppress("unused")
+    private fun onShaderPrecompileFinished(titleId: Long) {
+        _shaderPrecompileFinished.value = titleId
+    }
 
     object NfcTouchResult {
         const val SUCCESS: Int = 0

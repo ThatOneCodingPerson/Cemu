@@ -151,6 +151,7 @@ private fun MainNav() {
             navController = navController,
             startGame = { startGame(context, it) },
             tryCreateShortcut = { tryCreateShortcutForGame(context, it) },
+            compileShaders = { startGame(context, it, precompileShadersOnly = true) },
             goToSettings = { navController.navigate(SettingsRoute) },
             goToTitleManager = { navController.navigate(TitleManagerRoute) },
             goToGraphicPacks = { navController.navigate(GraphicPacksRoute) },
@@ -173,7 +174,8 @@ private fun createIntentForGame(context: Context, game: Game): Intent {
     return intent
 }
 
-private fun startGame(context: Context, game: Game) {
+/** [precompileShadersOnly]: only compile the game's shader cache for the current driver, see NativeEmulation. */
+private fun startGame(context: Context, game: Game, precompileShadersOnly: Boolean = false) {
     if (SaveSyncCoordinator.isSyncing) {
         Toast.makeText(context, tr("Wait until the saves are synced"), Toast.LENGTH_SHORT).show()
         return
@@ -183,6 +185,7 @@ private fun startGame(context: Context, game: Game) {
     val intent = createIntentForGame(context, game)
     // this process synced the saves at start; the emulation process doesn't have to again
     intent.putExtra(EmulationActivity.EXTRA_SAVES_SYNCED, true)
+    intent.putExtra(EmulationActivity.EXTRA_PRECOMPILE_SHADERS_ONLY, precompileShadersOnly)
     context.startActivity(intent)
 }
 

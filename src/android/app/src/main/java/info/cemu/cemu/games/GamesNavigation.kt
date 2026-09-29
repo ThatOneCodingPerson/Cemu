@@ -53,6 +53,7 @@ fun NavGraphBuilder.gamesNavigation(
     navController: NavHostController,
     startGame: (NativeGameTitles.Game) -> Unit,
     tryCreateShortcut: (NativeGameTitles.Game) -> Boolean,
+    compileShaders: (NativeGameTitles.Game) -> Unit,
     goToSettings: () -> Unit,
     goToTitleManager: () -> Unit,
     goToGraphicPacks: () -> Unit,
@@ -64,6 +65,7 @@ fun NavGraphBuilder.gamesNavigation(
             GamesListScreen(
                 startGame = startGame,
                 tryCreateShortcut = tryCreateShortcut,
+                compileShaders = compileShaders,
                 goToGameEditProfile = { game ->
                     gameViewModel.game = game
                     navController.navigate(GameListRoutes.GameProfileEditRoute)

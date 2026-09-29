@@ -39,7 +39,7 @@ fun SettingsHomeScreen(
                 is KeysImportResult.Imported -> when {
                     result.addedCount == 0 -> tr("All keys of this file were already added")
                     result.invalidLineCount > 0 ->
-                        tr("Added {0} keys, skipped {1} lines that aren't keys", result.addedCount, result.invalidLineCount)
+                        tr("Added {0} keys, skipped {1} lines that are not keys", result.addedCount, result.invalidLineCount)
 
                     else -> tr("Added {0} keys", result.addedCount)
                 }

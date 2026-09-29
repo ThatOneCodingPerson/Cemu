@@ -95,3 +95,9 @@ private:
 
 	std::recursive_mutex mutex;
 };
+
+#if BOOST_PLAT_ANDROID
+// Waits until entries added with AddFileAsync (new shaders and pipelines) are written. The Android app exits with
+// _exit, which would drop queued writes. False on timeout.
+bool FileCache_WaitForAsyncWrites(std::chrono::milliseconds maxWait);
+#endif

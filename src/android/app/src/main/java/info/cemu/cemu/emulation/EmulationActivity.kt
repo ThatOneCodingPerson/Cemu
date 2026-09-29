@@ -140,7 +140,14 @@ class EmulationActivity : AppCompatActivity() {
         if (needsStartupSync) {
             SaveSyncCoordinator.startStartupSync(this)
         }
-        EmulationSessionState.onSessionStarted(this)
+        // "Compile now" of the shader cache dialog: the game's code never runs, so no save sync. The session still
+        // counts as running, the main process must not import into the caches being compiled
+        isPrecompileShadersOnly =
+            intent.getBooleanExtra(EXTRA_PRECOMPILE_SHADERS_ONLY, false) && runningGamePath == null
+        if (isPrecompileShadersOnly) {
+            NativeEmulation.setPrecompileShadersOnly()
+        }
+        EmulationSessionState.onSessionStarted(this, syncSaves = !isPrecompileShadersOnly)
         DisplayUtils.init(this)
         inputManager = InputDelegateManager(this)
         deviceStatusMonitor = DeviceStatusMonitor(this)
@@ -164,6 +171,7 @@ class EmulationActivity : AppCompatActivity() {
                         if (isStartupSyncDone) {
                             EmulationScreen(
                                 gamePath = gamePath,
+                                isPrecompileShadersOnly = isPrecompileShadersOnly,
                                 setMotionSensorEnabled = inputManager::setDeviceMotionEnabled,
                                 onQuit = ::onQuit,
                                 setInputListeningEnabled = { enabled ->
@@ -235,7 +243,7 @@ class EmulationActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         if (::inputManager.isInitialized) {
-            EmulationSessionState.onSessionStopped(this)
+            EmulationSessionState.onSessionStopped(this, syncSaves = !isPrecompileShadersOnly)
         }
         super.onDestroy()
     }
@@ -272,6 +280,7 @@ class EmulationActivity : AppCompatActivity() {
     }
 
     private var isQuitting = false
+    private var isPrecompileShadersOnly = false
 
     private fun onQuit() {
         if (isQuitting) {
@@ -283,8 +292,10 @@ class EmulationActivity : AppCompatActivity() {
         lifecycleScope.launch {
             // off the main thread with the "Saving…" overlay (D2). If it takes too long the mirror stays dirty and
             // the next start exports it, nothing is lost
-            withTimeoutOrNull(QUIT_SAVE_SYNC_TIMEOUT_MS) {
-                EmulationSessionState.finishSession(this@EmulationActivity)
+            if (!isPrecompileShadersOnly) {
+                withTimeoutOrNull(QUIT_SAVE_SYNC_TIMEOUT_MS) {
+                    EmulationSessionState.finishSession(this@EmulationActivity)
+                }
             }
             finish()
             // not exitProcess(): exit() runs native static destructors while emulation threads still run (crash)
@@ -295,6 +306,7 @@ class EmulationActivity : AppCompatActivity() {
     companion object {
         const val EXTRA_LAUNCH_PATH: String = BuildConfig.APPLICATION_ID + ".LaunchPath"
         const val EXTRA_SAVES_SYNCED: String = BuildConfig.APPLICATION_ID + ".SavesSynced"
+        const val EXTRA_PRECOMPILE_SHADERS_ONLY: String = BuildConfig.APPLICATION_ID + ".PrecompileShadersOnly"
         private const val QUIT_SAVE_SYNC_TIMEOUT_MS = 60_000L
     }
 }

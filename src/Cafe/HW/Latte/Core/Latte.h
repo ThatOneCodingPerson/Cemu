@@ -174,3 +174,8 @@ void Latte_Start();
 void Latte_Stop();
 bool Latte_GetStopSignal(); // returns true if stop was requested or if in stopped state
 void LatteThread_Exit();
+#if BOOST_PLAT_ANDROID
+// The app's "compile shaders" mode, set before the title launches: the GPU thread compiles the title's shader and
+// pipeline caches, calls onFinished and stops there. The game never runs, it waits for the GPU init to finish.
+void Latte_SetPrecompileOnly(std::function<void()> onFinished);
+#endif

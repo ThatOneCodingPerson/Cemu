@@ -41,6 +41,15 @@ void Latte_LoadInitialRegisters()
 
 extern bool gx2WriteGatherInited;
 
+#if BOOST_PLAT_ANDROID
+static std::function<void()> s_precompileOnlyFinished;
+
+void Latte_SetPrecompileOnly(std::function<void()> onFinished)
+{
+	s_precompileOnlyFinished = std::move(onFinished);
+}
+#endif
+
 LatteTextureView* osScreenTVTex[2] = { nullptr };
 LatteTextureView* osScreenDRCTex[2] = { nullptr };
 
@@ -201,6 +210,16 @@ int Latte_ThreadEntry()
 	}
 	// load disk shader cache
     LatteShaderCache_Load();
+#if BOOST_PLAT_ANDROID
+	if (s_precompileOnlyFinished)
+	{
+		s_precompileOnlyFinished();
+		// g_isGPUInitFinished stays false, so the title's code never starts; the app terminates the process
+		while (!Latte_GetStopSignal())
+			std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		LatteThread_Exit();
+	}
+#endif
 	// init registers
 	Latte_LoadInitialRegisters();
 	// let CPU thread know the GPU is done initializing

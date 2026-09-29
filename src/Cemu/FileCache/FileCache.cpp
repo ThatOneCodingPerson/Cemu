@@ -42,6 +42,7 @@ struct _FileCacheAsyncWriter
 
 		std::unique_lock lock(m_fileCacheMutex);
 		m_writeRequests.emplace_back(std::move(async));
+		m_pendingJobs++;
 
 		lock.unlock();
 		m_fileCacheCondVar.notify_one();
@@ -68,9 +69,16 @@ private:
 			for (const auto& entry : requestsCopy)
 			{
 				entry.fileCache->AddFile({ entry.name1, entry.name2 }, entry.fileData.data(), (sint32)entry.fileData.size());
+				m_pendingJobs--;
 			}
 		}
 	}
+
+public:
+	// queued plus in-progress writes
+	std::atomic<size_t> m_pendingJobs{0};
+
+private:
 
 	std::thread m_fileCacheThread;
 	std::mutex m_fileCacheMutex;
@@ -510,6 +518,20 @@ void FileCache::AddFileAsync(const FileName& name, const uint8* fileData, sint32
 {
 	FileCacheAsyncWriter.AddJob(this, name, fileData, fileSize);
 }
+
+#if BOOST_PLAT_ANDROID
+bool FileCache_WaitForAsyncWrites(std::chrono::milliseconds maxWait)
+{
+	const auto deadline = std::chrono::steady_clock::now() + maxWait;
+	while (FileCacheAsyncWriter.m_pendingJobs.load() != 0)
+	{
+		if (std::chrono::steady_clock::now() >= deadline)
+			return false;
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+	return true;
+}
+#endif
 
 bool FileCache::_getFileDataInternal(const FileTableEntry* entry, std::vector<uint8>& dataOut)
 {

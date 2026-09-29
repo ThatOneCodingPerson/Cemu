@@ -17,6 +17,7 @@ add_library(CemuAndroid SHARED
         NativeLocalization.cpp
         NativeLogging.cpp
         NativeSettings.cpp
+        NativeShaderCache.cpp
         NativeSwkbd.cpp
         WuaConverter.cpp
 )

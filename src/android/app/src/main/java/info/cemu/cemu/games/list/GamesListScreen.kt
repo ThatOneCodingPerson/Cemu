@@ -67,6 +67,7 @@ import info.cemu.cemu.games.GameIcon
 import info.cemu.cemu.nativeinterface.NativeActiveSettings
 import info.cemu.cemu.nativeinterface.NativeGameTitles
 import info.cemu.cemu.nativeinterface.NativeGameTitles.Game
+import info.cemu.cemu.games.shadercache.ShaderCacheDialog
 import info.cemu.cemu.provider.DocumentsProvider
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -84,8 +85,10 @@ fun GamesListScreen(
     goToGraphicPacks: () -> Unit,
     goToAboutCemu: () -> Unit,
     tryCreateShortcut: (Game) -> Boolean,
+    compileShaders: (Game) -> Unit,
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
+    var shaderCacheGame by remember { mutableStateOf<Game?>(null) }
     val lifecycleState by lifecycleOwner.lifecycle.currentStateFlow.collectAsState()
     val coroutineScope = rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }
@@ -184,6 +187,7 @@ fun GamesListScreen(
                         )
                     }
                 },
+                openShaderCache = { shaderCacheGame = it },
             )
 
             PullToRefreshDefaults.Indicator(
@@ -195,6 +199,29 @@ fun GamesListScreen(
             )
         }
     }
+
+    ShaderCacheDialogHost(
+        game = shaderCacheGame,
+        onDismiss = { shaderCacheGame = null },
+        compileShaders = compileShaders,
+        onMessage = { snackbarHostState.showMessage(coroutineScope, it) },
+    )
+}
+
+@Composable
+private fun ShaderCacheDialogHost(
+    game: Game?,
+    onDismiss: () -> Unit,
+    compileShaders: (Game) -> Unit,
+    onMessage: (String) -> Unit,
+) {
+    game ?: return
+    ShaderCacheDialog(
+        game = game,
+        onCompile = { compileShaders(game) },
+        onMessage = onMessage,
+        onDismiss = onDismiss,
+    )
 }
 
 @Composable
@@ -206,6 +233,7 @@ private fun GameList(
     setFavorite: (Game, Boolean) -> Unit,
     createShortcut: (Game) -> Unit,
     deleteShaderCaches: (Game) -> Unit,
+    openShaderCache: (Game) -> Unit,
 ) {
     LazyVerticalGrid(
         modifier = Modifier
@@ -226,6 +254,7 @@ private fun GameList(
                     goToGameEditProfile(game)
                 },
                 onRemoveShaderCaches = { showDeleteShaderConfirmationDialog = true },
+                onShaderCache = { openShaderCache(game) },
                 onAboutTitle = {
                     goToGameDetails(game)
                 },
@@ -269,6 +298,7 @@ private fun GameListItem(
     onIsFavoriteChanged: (Boolean) -> Unit,
     onEditGameProfile: () -> Unit,
     onRemoveShaderCaches: () -> Unit,
+    onShaderCache: () -> Unit,
     onAboutTitle: () -> Unit,
     onCreateShortcut: () -> Unit,
     game: Game,
@@ -320,6 +350,7 @@ private fun GameListItem(
             onIsFavoriteChanged = onIsFavoriteChanged,
             onEditGameProfile = onEditGameProfile,
             onRemoveShaderCaches = onRemoveShaderCaches,
+            onShaderCache = onShaderCache,
             onAboutTitle = onAboutTitle,
             onCreateShortcut = onCreateShortcut,
         )
@@ -333,6 +364,7 @@ private fun GameContextMenu(
     onIsFavoriteChanged: (Boolean) -> Unit,
     onEditGameProfile: () -> Unit,
     onRemoveShaderCaches: () -> Unit,
+    onShaderCache: () -> Unit,
     onAboutTitle: () -> Unit,
     onCreateShortcut: () -> Unit,
     game: Game,
@@ -368,6 +400,10 @@ private fun GameContextMenu(
         GameContextMenuItem(
             onClick = onEditGameProfile,
             text = tr("Edit game profile"),
+        )
+        GameContextMenuItem(
+            onClick = onShaderCache,
+            text = tr("Shader cache…"),
         )
         GameContextMenuItem(
             enabled = gameTitleHasCaches,
