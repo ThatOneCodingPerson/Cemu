@@ -180,20 +180,46 @@ class EmulationViewModel(
     // The native side creates the swapchains on the GPU thread from the published surfaces.
     private var isMainSurfaceAvailable = false
     private var isTitleLaunched = false
+    // the title is paused natively while any of these is set
     private var isPausedBySurfaceLoss = false
+    private val _isPausedByUser = MutableStateFlow(false)
+    val isPausedByUser = _isPausedByUser.asStateFlow()
+    private var isNativePaused = false
+
+    private fun updateNativePause() {
+        val shouldPause = isTitleLaunched && (isPausedBySurfaceLoss || _isPausedByUser.value)
+        if (shouldPause == isNativePaused) {
+            return
+        }
+        isNativePaused = shouldPause
+        if (shouldPause) {
+            NativeEmulation.pauseTitle()
+        } else {
+            NativeEmulation.resumeTitle()
+        }
+    }
 
     private fun pauseForSurfaceLoss() {
         if (isTitleLaunched && !isPausedBySurfaceLoss) {
-            NativeEmulation.pauseTitle()
             isPausedBySurfaceLoss = true
+            updateNativePause()
         }
     }
 
     private fun resumeAfterSurfaceLoss() {
         if (isPausedBySurfaceLoss) {
             isPausedBySurfaceLoss = false
-            NativeEmulation.resumeTitle()
+            updateNativePause()
         }
+    }
+
+    /** Pause or resume on the user's request (hotkey, menu). Does nothing before the title runs. */
+    fun togglePause() {
+        if (!isTitleLaunched) {
+            return
+        }
+        _isPausedByUser.value = !_isPausedByUser.value
+        updateNativePause()
     }
 
     private fun updateSurfaceDimensions(isMainCanvas: Boolean, width: Int, height: Int) {
@@ -287,6 +313,7 @@ class EmulationViewModel(
             // activity's surface went away, resume once ours is there.
             isTitleLaunched = true
             isPausedBySurfaceLoss = true
+            isNativePaused = true
             if (isMainSurfaceAvailable) {
                 resumeAfterSurfaceLoss()
             }

@@ -213,6 +213,11 @@ private fun hotkeyActionToString(hotkeyAction: HotkeyAction) = when (hotkeyActio
     HotkeyAction.QUIT -> tr("Quit")
     HotkeyAction.TOGGLE_MENU -> tr("Toggle menu")
     HotkeyAction.SHOW_EMULATED_USB_DEVICES_DIALOG -> tr("Show Emulated USB Devices dialog")
+    HotkeyAction.TOGGLE_PAUSE -> tr("Pause / resume")
+    HotkeyAction.TAKE_SCREENSHOT -> tr("Take screenshot")
+    HotkeyAction.SWAP_SCREENS -> tr("Swap screens")
+    HotkeyAction.TOGGLE_PAD -> tr("Show / hide PAD")
+    HotkeyAction.TOGGLE_INPUT_OVERLAY -> tr("Show / hide input overlay")
 }
 
 @Composable

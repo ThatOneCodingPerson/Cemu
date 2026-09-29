@@ -11,6 +11,7 @@ import android.view.SurfaceView
 import android.view.View
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -57,6 +59,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
@@ -105,11 +108,13 @@ fun EmulationScreen(
     // initialization also finishes when it failed, the pad and second-screen offer only make sense on success
     val isEmulationRunning = isEmulationInitialized && emulationError == null
     val sideMenuState by viewModel.sideMenuState.collectAsState()
+    val isPausedByUser by viewModel.isPausedByUser.collectAsState()
     val isInputOverlayVisible by viewModel.isInputOverlayVisible.collectAsState()
     val inputOverlaySettings by viewModel.inputOverlaySettings.collectAsState()
 
     // second display (dual-screen handheld like the AYN Thor, or an external monitor) for the GamePad, null if none
-    val activity = LocalContext.current as? Activity
+    val context = LocalContext.current
+    val activity = context as? Activity
     val padDisplayId = if (activity != null) rememberPadDisplayId(activity) else null
 
     LaunchedEffect(padDisplayId, isEmulationRunning) {
@@ -167,12 +172,42 @@ fun EmulationScreen(
         NativeEmulation.setExternalScreenRotatedLeft(sideMenuState.isExternalScreenRotatedLeft)
     }
 
+    fun takeScreenshot() {
+        val errorMessage = when {
+            // the next frame is only presented after resuming
+            viewModel.isPausedByUser.value -> tr("Resume the game to take a screenshot")
+            NativeEmulation.requestScreenshot() -> null
+            else -> tr("Unable to take a screenshot right now")
+        }
+        errorMessage?.let { snackbarHostState.showMessage(scope, it) }
+    }
+
+    LaunchedEffect(Unit) {
+        NativeEmulation.screenshots.collect { screenshot ->
+            val saved = saveScreenshotToGallery(context.applicationContext, screenshot)
+            snackbarHostState.showMessage(
+                scope,
+                if (saved) tr("Screenshot saved to {0}", SCREENSHOTS_FOLDER) else tr("Failed to save the screenshot"),
+            )
+        }
+    }
+
+    fun toggleSideMenuOption(toggle: (SideMenuState) -> SideMenuState) {
+        viewModel.updateSideMenuState(toggle(viewModel.sideMenuState.value))
+    }
+
     LaunchedEffect(Unit) {
         HotkeyManager.actions.collect { action ->
             when (action) {
                 HotkeyAction.QUIT -> showQuitConfirmationDialog = true
                 HotkeyAction.TOGGLE_MENU -> toggleMenu()
                 HotkeyAction.SHOW_EMULATED_USB_DEVICES_DIALOG -> showEmulatedUSBDevices = true
+                HotkeyAction.TOGGLE_PAUSE -> viewModel.togglePause()
+                HotkeyAction.TAKE_SCREENSHOT -> takeScreenshot()
+                HotkeyAction.SWAP_SCREENS -> toggleSideMenuOption { it.copy(areScreensSwapped = !it.areScreensSwapped) }
+                HotkeyAction.TOGGLE_PAD -> toggleSideMenuOption { it.copy(isPadVisible = !it.isPadVisible) }
+                HotkeyAction.TOGGLE_INPUT_OVERLAY ->
+                    toggleSideMenuOption { it.copy(isInputOverlayVisible = !it.isInputOverlayVisible) }
             }
         }
     }
@@ -191,6 +226,15 @@ fun EmulationScreen(
                     EmulationSideMenuContent(
                         sideMenuState = sideMenuState,
                         hasSecondDisplay = padDisplayId != null,
+                        isPaused = isPausedByUser,
+                        onTogglePause = {
+                            viewModel.togglePause()
+                            closeDrawer()
+                        },
+                        onTakeScreenshot = {
+                            closeDrawer()
+                            takeScreenshot()
+                        },
                         updateState = {
                             viewModel.updateSideMenuState(it)
                             setMotionSensorEnabled(it.isMotionEnabled)
@@ -257,6 +301,17 @@ fun EmulationScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        if (isPausedByUser) {
+            Text(
+                text = tr("Paused"),
+                color = Color.White,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(16.dp)
+                    .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+        }
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
@@ -331,12 +386,27 @@ private fun EditInputsLayout(
 private fun EmulationSideMenuContent(
     sideMenuState: SideMenuState,
     hasSecondDisplay: Boolean,
+    isPaused: Boolean,
+    onTogglePause: () -> Unit,
+    onTakeScreenshot: () -> Unit,
     updateState: (SideMenuState) -> Unit,
     onShowEmulatedUSBDevices: () -> Unit,
     onEditInputOverlay: () -> Unit,
     onResetInputOverlay: () -> Unit,
     onQuit: () -> Unit,
 ) {
+    CheckboxItem(
+        label = tr("Pause"),
+        checked = isPaused,
+        onCheckedChange = { onTogglePause() },
+    )
+
+    TextButtonItem(
+        label = tr("Take screenshot"),
+        enabled = !isPaused,
+        onClick = onTakeScreenshot,
+    )
+
     CheckboxItem(
         label = tr("Enable motion"),
         checked = sideMenuState.isMotionEnabled,

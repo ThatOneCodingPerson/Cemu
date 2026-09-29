@@ -1,6 +1,10 @@
 package info.cemu.cemu.nativeinterface
 
 import android.view.Surface
+import androidx.annotation.Keep
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
 object NativeEmulation {
     @JvmStatic
@@ -77,6 +81,29 @@ object NativeEmulation {
      */
     @JvmStatic
     external fun getSystemGpuInfo(): Array<String>?
+
+    /**
+     * Asks the renderer to capture the next presented frame, delivered to [screenshots]. Returns false if no game
+     * runs or a capture is still pending.
+     */
+    @JvmStatic
+    external fun requestScreenshot(): Boolean
+
+    /** [rgba] holds width * height pixels, 4 bytes each. */
+    class Screenshot(val rgba: ByteArray, val width: Int, val height: Int)
+
+    private val _screenshots = MutableSharedFlow<Screenshot>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val screenshots = _screenshots.asSharedFlow()
+
+    @Keep
+    @JvmStatic
+    @Suppress("unused")
+    private fun onScreenshotCaptured(rgba: ByteArray, width: Int, height: Int) {
+        _screenshots.tryEmit(Screenshot(rgba, width, height))
+    }
 
     /** Terminates the emulation process after flushing logs. Never returns. */
     @JvmStatic

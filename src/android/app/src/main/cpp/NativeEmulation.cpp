@@ -524,6 +524,71 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_resumeTitle([[maybe_unused]]
 	CafeSystem::ResumeTitle();
 }
 
+namespace NativeEmulation
+{
+	// The renderer captures a frame on the GPU thread and hands the RGB data to OnScreenshotCaptured on a detached
+	// thread. Kotlin encodes and saves it (NativeEmulation.onScreenshotCaptured).
+	JNIUtils::Scopedjclass s_nativeEmulationClass;
+	jmethodID s_onScreenshotCapturedMethod = nullptr;
+	// Renderer::RequestScreenshot isn't synchronized with a capture in progress, so allow one request at a time.
+	// A request stays pending while no frame is presented (e.g. paused), allow a new one after a while.
+	constexpr auto SCREENSHOT_REQUEST_TIMEOUT = std::chrono::seconds(5);
+	std::atomic_bool s_screenshotPending = false;
+	std::atomic<std::chrono::steady_clock::time_point> s_screenshotRequestTime;
+
+	std::optional<std::string> OnScreenshotCaptured(const std::vector<uint8>& rgbData, int width, int height, [[maybe_unused]] bool mainWindow)
+	{
+		const size_t pixelCount = static_cast<size_t>(width) * height;
+		if (s_onScreenshotCapturedMethod != nullptr && width > 0 && height > 0 && rgbData.size() >= pixelCount * 3)
+		{
+			// Android bitmaps (ARGB_8888) store RGBA bytes
+			std::vector<uint8> rgbaData(pixelCount * 4);
+			for (size_t i = 0; i < pixelCount; i++)
+			{
+				rgbaData[i * 4 + 0] = rgbData[i * 3 + 0];
+				rgbaData[i * 4 + 1] = rgbData[i * 3 + 1];
+				rgbaData[i * 4 + 2] = rgbData[i * 3 + 2];
+				rgbaData[i * 4 + 3] = 0xFF;
+			}
+			JNIUtils::RunOnJNIWorker([&](JNIEnv* env) {
+				jbyteArray array = env->NewByteArray(static_cast<jsize>(rgbaData.size()));
+				if (array == nullptr)
+				{
+					JNIUtils::CheckAndClearException(env); // OutOfMemoryError
+					return;
+				}
+				env->SetByteArrayRegion(array, 0, static_cast<jsize>(rgbaData.size()), reinterpret_cast<const jbyte*>(rgbaData.data()));
+				env->CallStaticVoidMethod(*s_nativeEmulationClass, s_onScreenshotCapturedMethod, array, width, height);
+				JNIUtils::CheckAndClearException(env);
+				env->DeleteLocalRef(array);
+			});
+		}
+		s_screenshotPending = false;
+		return std::nullopt; // Kotlin reports the result
+	}
+} // namespace NativeEmulation
+
+extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeEmulation_requestScreenshot(JNIEnv* env, jclass clazz)
+{
+	if (!g_renderer || !CafeSystem::IsTitleRunning())
+		return false;
+	if (NativeEmulation::s_onScreenshotCapturedMethod == nullptr)
+	{
+		NativeEmulation::s_nativeEmulationClass = JNIUtils::Scopedjclass(clazz);
+		NativeEmulation::s_onScreenshotCapturedMethod = env->GetStaticMethodID(clazz, "onScreenshotCaptured", "([BII)V");
+		if (JNIUtils::CheckAndClearException(env) || NativeEmulation::s_onScreenshotCapturedMethod == nullptr)
+			return false;
+	}
+	const auto now = std::chrono::steady_clock::now();
+	if (NativeEmulation::s_screenshotPending && now - NativeEmulation::s_screenshotRequestTime.load() < NativeEmulation::SCREENSHOT_REQUEST_TIMEOUT)
+		return false;
+	NativeEmulation::s_screenshotPending = true;
+	NativeEmulation::s_screenshotRequestTime = now;
+	g_renderer->RequestScreenshot(NativeEmulation::OnScreenshotCaptured);
+	return true;
+}
+
 // the GamePad may be shown on another display with a different density (e.g. the AYN Thor's bottom screen)
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeEmulation_setPadDPI([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jfloat dpi)
