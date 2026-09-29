@@ -83,6 +83,7 @@ fun GamesListScreen(
     goToSettings: () -> Unit,
     goToTitleManager: () -> Unit,
     goToGraphicPacks: () -> Unit,
+    goToGraphicPacksForGame: (Game) -> Unit,
     goToAboutCemu: () -> Unit,
     tryCreateShortcut: (Game) -> Boolean,
     compileShaders: (Game) -> Unit,
@@ -188,6 +189,7 @@ fun GamesListScreen(
                     }
                 },
                 openShaderCache = { shaderCacheGame = it },
+                goToGraphicPacksForGame = goToGraphicPacksForGame,
             )
 
             PullToRefreshDefaults.Indicator(
@@ -234,6 +236,7 @@ private fun GameList(
     createShortcut: (Game) -> Unit,
     deleteShaderCaches: (Game) -> Unit,
     openShaderCache: (Game) -> Unit,
+    goToGraphicPacksForGame: (Game) -> Unit,
 ) {
     LazyVerticalGrid(
         modifier = Modifier
@@ -255,6 +258,7 @@ private fun GameList(
                 },
                 onRemoveShaderCaches = { showDeleteShaderConfirmationDialog = true },
                 onShaderCache = { openShaderCache(game) },
+                onGraphicPacks = { goToGraphicPacksForGame(game) },
                 onAboutTitle = {
                     goToGameDetails(game)
                 },
@@ -299,6 +303,7 @@ private fun GameListItem(
     onEditGameProfile: () -> Unit,
     onRemoveShaderCaches: () -> Unit,
     onShaderCache: () -> Unit,
+    onGraphicPacks: () -> Unit,
     onAboutTitle: () -> Unit,
     onCreateShortcut: () -> Unit,
     game: Game,
@@ -351,6 +356,7 @@ private fun GameListItem(
             onEditGameProfile = onEditGameProfile,
             onRemoveShaderCaches = onRemoveShaderCaches,
             onShaderCache = onShaderCache,
+            onGraphicPacks = onGraphicPacks,
             onAboutTitle = onAboutTitle,
             onCreateShortcut = onCreateShortcut,
         )
@@ -365,6 +371,7 @@ private fun GameContextMenu(
     onEditGameProfile: () -> Unit,
     onRemoveShaderCaches: () -> Unit,
     onShaderCache: () -> Unit,
+    onGraphicPacks: () -> Unit,
     onAboutTitle: () -> Unit,
     onCreateShortcut: () -> Unit,
     game: Game,
@@ -400,6 +407,10 @@ private fun GameContextMenu(
         GameContextMenuItem(
             onClick = onEditGameProfile,
             text = tr("Edit game profile"),
+        )
+        GameContextMenuItem(
+            onClick = onGraphicPacks,
+            text = tr("Graphic packs…"),
         )
         GameContextMenuItem(
             onClick = onShaderCache,

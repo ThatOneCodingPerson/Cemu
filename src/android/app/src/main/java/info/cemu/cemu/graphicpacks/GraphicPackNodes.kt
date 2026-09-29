@@ -55,7 +55,8 @@ class GraphicPackSectionNode : GraphicPackNode {
                 graphicPackBasicInfo.virtualPath,
                 graphicPackBasicInfo.enabled,
                 titleIdInstalled,
-                node
+                node,
+                graphicPackBasicInfo.titleIds,
             )
         )
     }
@@ -93,6 +94,8 @@ class GraphicPackDataNode(
     val path: String,
     enabled: Boolean,
     parent: GraphicPackSectionNode,
+    /** The titles the pack applies to. */
+    val titleIds: LongArray = LongArray(0),
 ) : GraphicPackNode(name, parent) {
     constructor(
         id: Long,
@@ -101,7 +104,8 @@ class GraphicPackDataNode(
         enabled: Boolean,
         titleIdInstalled: Boolean,
         parentNode: GraphicPackSectionNode,
-    ) : this(id, name, path, enabled, parentNode) {
+        titleIds: LongArray,
+    ) : this(id, name, path, enabled, parentNode, titleIds) {
         this.titleIdInstalled = titleIdInstalled
     }
 

@@ -58,11 +58,19 @@ import info.cemu.cemu.common.ui.components.SingleSelection
 import info.cemu.cemu.common.ui.extensions.showMessage
 import info.cemu.cemu.common.ui.localization.tr
 
+/** Limits the screen to the graphic packs of one title. */
+data class TitleFilter(val titleId: Long, val titleName: String)
+
 @Composable
 fun GraphicPacksScreen(
     navigateBack: () -> Unit,
+    titleFilter: TitleFilter? = null,
     graphicPacksViewModel: GraphicPacksViewModel = viewModel(),
 ) {
+    LaunchedEffect(titleFilter) {
+        graphicPacksViewModel.setTitleFilter(titleFilter?.titleId)
+    }
+    val titleGraphicPackDataNodes by graphicPacksViewModel.titleGraphicPackDataNodes.collectAsState()
     val graphicPackDataNodes by graphicPacksViewModel.graphicPackDataNodes.collectAsState()
     val query by graphicPacksViewModel.filterText.collectAsState()
     val installedOnly by graphicPacksViewModel.installedOnly.collectAsState()
@@ -90,21 +98,32 @@ fun GraphicPacksScreen(
         }
 
         if (!currentNodeState.value.isRoot()) {
-            graphicPacksViewModel.navigateBack()
+            // the title's packs are listed flat, back returns to that list rather than to the pack's section
+            if (titleFilter != null) {
+                graphicPacksViewModel.navigateToRoot()
+            } else {
+                graphicPacksViewModel.navigateBack()
+            }
             return
         }
 
         navigateBack()
     }
 
-    BackHandler(enabled = showGraphicPackSearch || !currentNodeState.value.isRoot()) {
+    BackHandler(enabled = showGraphicPackSearch || !currentNode.isRoot()) {
         handleBack()
     }
 
     ScreenContentLazy(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         actions = {
-            if (currentNode.isRoot()) {
+            if (titleFilter != null) {
+                if (currentNode.isRoot()) {
+                    IconButton(onClick = { graphicPacksViewModel.downloadNewUpdate(context) }) {
+                        Icon(painter = painterResource(R.drawable.ic_download), contentDescription = null)
+                    }
+                }
+            } else if (currentNode.isRoot()) {
                 GraphicPacksRootSectionActions(
                     showMainActions = !showGraphicPackSearch,
                     onSearchClicked = {
@@ -129,12 +148,28 @@ fun GraphicPacksScreen(
                         hint = tr("Search graphic packs"),
                     )
                 } else {
-                    DefaultAppBarTitle(currentNode.name ?: tr("Graphic packs"))
+                    DefaultAppBarTitle(currentNode.name ?: titleFilter?.titleName ?: tr("Graphic packs"))
                 }
             }
         },
         navigateBack = ::handleBack,
     ) {
+        if (titleFilter != null && currentNode.isRoot()) {
+            if (titleGraphicPackDataNodes.isEmpty()) {
+                item {
+                    Text(
+                        modifier = Modifier.padding(8.dp),
+                        text = tr("No graphic packs for this game. Download the latest graphic packs with the download button."),
+                    )
+                }
+            }
+            graphicPackDataSearchItems(
+                nodes = titleGraphicPackDataNodes,
+                onClick = { graphicPacksViewModel.navigateTo(it) },
+            )
+            return@ScreenContentLazy
+        }
+
         if (showGraphicPackSearch && currentNode.isRoot()) {
             graphicPackDataSearchItems(
                 nodes = graphicPackDataNodes,

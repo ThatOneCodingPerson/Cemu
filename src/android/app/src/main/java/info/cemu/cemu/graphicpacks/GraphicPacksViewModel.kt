@@ -279,6 +279,26 @@ class GraphicPacksViewModel(
         viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList()
     )
 
+    private val titleFilterId = MutableStateFlow<Long?>(null)
+
+    /** Shows only the packs of this title (see [titleGraphicPackDataNodes]); null for all. */
+    fun setTitleFilter(titleId: Long?) {
+        titleFilterId.value = titleId
+    }
+
+    val titleGraphicPackDataNodes: StateFlow<List<GraphicPackDataNode>> = combine(
+        _graphicPackDataNodes, titleFilterId
+    ) { graphicPackNodes, titleId ->
+        if (titleId == null) emptyList() else graphicPackNodes.filter { titleId in it.titleIds }
+    }.stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList()
+    )
+
+    fun navigateToRoot() {
+        path.value = listOf(rootNode)
+        clearCurrentDataGraphicPack()
+    }
+
     private fun refreshGraphicPacks() {
         rootNode = GraphicPackSectionNode().apply {
             NativeGraphicPacks.getGraphicPackBasicInfos().forEach {

@@ -57,6 +57,7 @@ fun NavGraphBuilder.gamesNavigation(
     goToSettings: () -> Unit,
     goToTitleManager: () -> Unit,
     goToGraphicPacks: () -> Unit,
+    goToGraphicPacksForGame: (NativeGameTitles.Game) -> Unit,
     goToAboutCemu: () -> Unit,
 ) {
     navigation<GameListRoute>(startDestination = GameListRoutes.GamesRoute) {
@@ -77,6 +78,7 @@ fun NavGraphBuilder.gamesNavigation(
                 goToSettings = goToSettings,
                 goToTitleManager = goToTitleManager,
                 goToGraphicPacks = goToGraphicPacks,
+                goToGraphicPacksForGame = goToGraphicPacksForGame,
                 goToAboutCemu = goToAboutCemu,
             )
         }

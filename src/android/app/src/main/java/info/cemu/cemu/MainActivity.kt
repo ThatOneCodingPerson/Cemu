@@ -36,6 +36,7 @@ import info.cemu.cemu.common.ui.localization.tr
 import info.cemu.cemu.emulation.EmulationActivity
 import info.cemu.cemu.games.GameListRoute
 import info.cemu.cemu.games.gamesNavigation
+import info.cemu.cemu.graphicpacks.GraphicPacksForTitleRoute
 import info.cemu.cemu.graphicpacks.GraphicPacksRoute
 import info.cemu.cemu.graphicpacks.graphicPacksNavigation
 import info.cemu.cemu.nativeinterface.NativeGameTitles.Game
@@ -155,6 +156,9 @@ private fun MainNav() {
             goToSettings = { navController.navigate(SettingsRoute) },
             goToTitleManager = { navController.navigate(TitleManagerRoute) },
             goToGraphicPacks = { navController.navigate(GraphicPacksRoute) },
+            goToGraphicPacksForGame = {
+                navController.navigate(GraphicPacksForTitleRoute(it.titleId, it.name ?: ""))
+            },
             goToAboutCemu = { navController.navigate(AboutCemuRoute) },
         )
         settingsNavigation(navController)
