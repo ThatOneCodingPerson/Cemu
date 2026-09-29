@@ -226,7 +226,11 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 5. [ ] Per-game controller profiles and overlay layouts
 6. [ ] Save backup/restore per title; single-file WUA/WUP install picker
 7. [ ] Overlay frametime graph, battery and temperature; sustained-performance toggle
-8. [ ] Amiibo picker (`nn_nfp`)
+8. [?] Amiibo picker (`nn_nfp`) (2026-09-28, 61d1481e): game menu "Scan amiibo" + hotkey, files copied to `<user data>/amiibo` (games write back to them)
+   - **Device test:** in a game that asks for an amiibo (e.g. BotW rune, Smash, Splatoon, MK8):
+     - Menu > Scan amiibo > Import file > pick a .bin: "Scanned <name>" and the game reacts.
+     - Scanning again from the list works; importing the same file again doesn't create a duplicate.
+     - Delete works. A non-amiibo file gives "Not a valid amiibo or NFC file".
 9. [ ] Save states: experimental, fork-only; start from Cemu issue #2062 and PR #953
 10. [ ] Vulkan pre-rotation (P1) and an adaptive ADPF target
 
