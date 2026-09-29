@@ -116,6 +116,11 @@
 - **Navigation:** back buttons call `navController.navigateBackSafely()` (`common/ui/extensions`), never a bare `popBackStack()`. A double tap otherwise pops the start destination and leaves a blank screen.
 - **Key capture UI:** use a `Popup`, not a `Dialog`, when listening to `GamepadInputSource`. A Dialog window takes the key events away from the activity.
 - **Driver fetcher:** the repo list lives in `settings/customdrivers/DriverReleases.kt`. Re-check that the repos still exist when touching it (one moved in 2026-09).
+- **SAF paths:** native code names SAF documents `content://<auth>/tree/<encoded tree id>/document/<plain document id>` (`nativeinterface/SafNativePath.kt`, unit tested). Only `NativeFiles` converts to and from URIs; the parser also accepts older half-encoded paths stored in settings, the title cache and shortcuts.
+- **Long tasks** (install, compression): wrap them in `ForegroundTasks.begin(...)`/`end()` (a dataSync foreground service), and make them resumable after process death (see the `.installing`/`.backup` order in `InstallTitleUseCase`).
+- **Key cache:** `g_keyCache` is append-only (a deque) because `KeyCache_Reload` adds keys while the title scan reads them; never clear it outside `KeyCache_Prepare`.
+- **Controller profiles:** after `InputManager::load` replaces an emulated controller, call `EmulatedControllerManager::GetController(i).Reload()`, or later edits go to the discarded object.
+- **Android-only core additions** (overlay battery/thermal/frame time, KeyCache_Reload) sit behind `#if BOOST_PLAT_ANDROID` so desktop builds are unchanged.
 
 ## Conventions
 - **C++** (`CODING_STYLE.md`, `.clang-format`):

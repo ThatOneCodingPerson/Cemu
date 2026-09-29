@@ -131,3 +131,38 @@ Format: date · what was done · what's next · open questions. Keep each entry 
 - Compose `Dialog` windows don't pass gamepad keys to the activity; use `Popup` for key capture.
 
 **Next:** see "Next session" in TODO.md. Every session-2 item is `[?]` and needs the owner's device test first.
+
+## 2026-09-28/29, session 3 (bugs, owner requests, backlog features)
+**Owner:** "so far it's doing pretty great" from their own testing, and asked to keep going. Mid-session they asked for a keys file import. Still no adb device (MTP only).
+
+**Commits** (every one built as a dev APK; 21 JVM tests pass: 3 ArchUnit + driver 3 + SAF 7 + keys 4):
+- **Bugs:**
+  - 9e51a7b8 SAF paths (K30).
+  - 76d76442 K16.
+  - ef6fc725 K17/K27.
+  - a6d42c74 P9 compile thread priority.
+  - 6d877933 K13 (ForegroundTaskService plus install recovery).
+  - adf22428 TV/GamePad split and K31.
+- **Features:**
+  - 61d1481e amiibo.
+  - f03ccff9 battery/thermal overlay.
+  - 30c39093 save export/import.
+  - 49c662ca keys file import (owner request).
+  - a23cad60 otp/seeprom import.
+  - f1faa289 sustained performance mode.
+  - 89469694 controller profiles (named and per-game).
+  - 78299e2e frame time graph.
+
+**Research this session:**
+- AOSP `DocumentsContract` (GitHub mirror, main): `getDocumentId` decodes, `buildDocumentUriUsingTree` encodes.
+- setpriority(2) man page (the nice value is per-thread on Linux/NPTL), and AOSP libutils `androidSetThreadPriority` uses `setpriority(PRIO_PROCESS, tid)`.
+- Foreground services: developer.android.com FGS types and the Android 15 behavior changes (dataSync: 6 h/24 h, `onTimeout`, needs `FOREGROUND_SERVICE_DATA_SYNC`).
+- `android.jar` (API 36) via javap: `PowerManager` thermal constants and listener, `BatteryManager` extras, sustained performance mode (not deprecated).
+- Core code: `nfc::TouchTagFromFile` (amiibo keys built in), `KeyCache`, `iosu_crypto` (otp 1024 / seeprom 512 bytes), `InputManager` profiles, and `GameProfile` `[Controller]`.
+
+**Lessons:**
+- `<<'EOF'` heredocs break in this harness when the text contains `$` or unbalanced quotes. Write edit scripts with the Write tool into the scratchpad and run them with python.
+- The auto-mode safety check failed transiently several times (WebFetch/Bash/PowerShell). Edit/Write kept working; retry later.
+- A Kotlin `object`'s anonymous C++ struct can't hold a `static constexpr` member (build error); use a namespace-scope constant.
+
+**Next:** see "Current focus" in TODO.md. D1/D2/D7 still need the owner's decision.

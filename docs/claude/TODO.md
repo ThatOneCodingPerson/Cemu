@@ -12,24 +12,21 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 **Working branch:** `android-stability` (from `android-port-dual` 564bfdad). It has no upstream. Ask before any push or merge.
 
 ## Current focus
-- Phases 1–6 are built and awaiting device tests (latest APK `dist/android/output/Cemu-latest-dev.apk`). Phase 7 research first pass is done.
-- **Session 2 (2026-09-28), in order:**
-  1. [?] Remaining open bugs: K14, K15, K18, K25, K26 (c27e208b), A15 (aaab5241 + pad/second-screen gate), B5 (4392ec37). K24 blocked: core swkbd has no cancel result.
-  2. [?] Backlog #1, the GPU driver fetcher (e8efeb45).
-  3. [?] Backlog #3, hotkeys (1c18255f).
-  4. [?] Backlog #2, auto-map (8e9a5094).
+- Latest APK: `dist/android/output/Cemu-latest-dev.apk`. Phases 1–6 and sessions 2–3 are built; everything is `[?]` until device-tested.
 - **Owner feedback (session 3 start, 2026-09-28):** "so far it's doing pretty great". Testing on their own devices went well, and no specific regressions were reported. Items stay `[?]` until confirmed individually. The owner asked to keep working through the list.
 - **Blocked on the owner:**
-  - Device tests: the Thor has no USB debugging. It was still MTP only at the end of session 2; `adb devices` is empty.
-  - The D1/D2 save-sync design decision (see Phase 3).
-- **Next session, in order:**
-  1. If a device is attached: install, walk the `[?]` device-test lists (newest first), pull logs, fix regressions.
-  2. [?] SAF path encoding (9e51a7b8). [?] K16 (76d76442), K17 + K27 (ef6fc725).
+  - Device tests over adb: the Thor has no USB debugging (MTP only, `adb devices` empty through session 3).
+  - The D1/D2 save-sync design decision (see Phase 3); D7 goes with it.
+- **Session 2 (2026-09-28):**
+  - [?] Open bugs: K14, K15, K18, K25, K26 (c27e208b), A15 (aaab5241, 08ddc021), B5 (4392ec37).
+  - [?] Driver fetcher (e8efeb45), hotkeys (1c18255f), auto-map (8e9a5094).
+- **Session 3 (2026-09-28/29), bugs** (device test steps below):
+  - [?] SAF path encoding (9e51a7b8). [?] K16 (76d76442), K17 + K27 (ef6fc725).
      - **Device test:**
        - Enable motion, trigger an activity recreation (e.g. multi-window/resize if possible): motion still works.
        - Overlay edit > resize: follows the finger smoothly and still resizes at the screen edge.
        - A layout saved on one device/screen size shows every button on screen on another.
-  3. [?] P9 pipeline compile threads at background priority (a6d42c74). [?] K13 install/compression kept alive by a foreground service + interrupted-install recovery (6d877933).
+  - [?] P9 pipeline compile threads at background priority (a6d42c74). [?] K13 install/compression kept alive by a foreground service + interrupted-install recovery (6d877933).
      - **Device test:**
        - Install a title from the title manager, press Home during the copy:
          - A "Installing title" notification with progress shows, if notifications are allowed for Cemu Dev; otherwise it's in the task manager.
@@ -39,8 +36,17 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
          - Updating an installed title and killing it midway brings the old version back.
        - The same for WUA compression (notification plus completion).
        - In a shader-heavy area, compare stutter and FPS with the previous APK (P9).
-  4. Backlog #4, dual-screen polish, then #5 per-game controller profiles (also covers the auto-map follow-up).
-  5. P1 pre-rotation: engine work (the final blit and ImGui both need rotating); measure on a portrait-native phone first.
+- **Session 3 features** (device test steps at each item in "Owner requests" and "Feature backlog"):
+  - [?] Keys file import (49c662ca) and otp.bin/seeprom.bin import (a23cad60). These are owner requests.
+  - [?] TV/GamePad split + K31 (adf22428)
+  - [?] Amiibo (61d1481e)
+  - [?] Battery/thermal (f03ccff9), frame time graph (78299e2e) and sustained performance (f1faa289) in the overlay/settings
+  - [?] Save export/import (30c39093)
+  - [?] Named and per-game controller profiles (89469694)
+- **Next, in order:**
+  1. If a device is attached: install, walk the `[?]` device-test lists (newest first), pull logs, fix regressions.
+  2. Backlog #4 remainder (display picker, mirror TV, overlay on the second screen), #5 per-game overlay layouts, #6 single-file WUA/WUP install picker.
+  3. P1 pre-rotation: engine work (the final blit and ImGui both need rotating); measure on a portrait-native phone first.
 
 ---
 
@@ -251,7 +257,7 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
        - Import a random zip: "isn't a save backup".
        - With a custom data root: restart after importing, and the imported save is still there (not overwritten by the sync).
    - [ ] Single-file WUA/WUP install picker
-7. [~] Overlay frametime graph, battery and temperature; sustained-performance toggle
+7. [?] Overlay frametime graph, battery and temperature; sustained-performance toggle
    - [?] Battery (level, charging "+", battery temperature) and thermal status lines in the overlay; Settings > Overlay toggles (2026-09-28, f03ccff9)
      - **Device test:** overlay position set, both toggles on:
        - The lines show and update while charging/unplugging.
@@ -259,7 +265,8 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
        - The overlay with only these two lines enabled still shows.
    - [?] Sustained performance mode toggle in Settings > General, only shown if the device supports it (2026-09-29, f1faa289)
      - **Device test:** check whether the Thor shows the toggle. If it does, enable it, play 20+ min and compare the FPS stability with it off.
-   - [ ] Frametime graph
+   - [?] Frame time graph (last 120 frames, avg/max, 0–50 ms scale) in the overlay; Settings > Overlay toggle (2026-09-29, 78299e2e)
+     - **Device test:** enable it with the overlay position set. The graph shows, and a shader-compile stutter shows as a spike.
 8. [?] Amiibo picker (`nn_nfp`) (2026-09-28, 61d1481e): game menu "Scan amiibo" + hotkey, files copied to `<user data>/amiibo` (games write back to them)
    - **Device test:** in a game that asks for an amiibo (e.g. BotW rune, Smash, Splatoon, MK8):
      - Menu > Scan amiibo > Import file > pick a .bin: "Scanned <name>" and the game reacts.
