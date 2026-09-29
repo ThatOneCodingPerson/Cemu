@@ -4,6 +4,10 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- ForegroundTaskService: keeps title installs/compression alive in the background -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <uses-feature
         android:name="android.hardware.vulkan.version"
@@ -55,6 +59,11 @@
                 <data android:pathPattern=".*\\.rpx" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".common.android.service.ForegroundTaskService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <provider
             android:name=".provider.DocumentsProvider"

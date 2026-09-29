@@ -2,6 +2,8 @@ package info.cemu.cemu.titlemanager.usecases
 
 import android.content.Context
 import android.net.Uri
+import info.cemu.cemu.common.android.service.ForegroundTasks
+import info.cemu.cemu.common.ui.localization.tr
 import info.cemu.cemu.nativeinterface.NativeGameTitles
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -71,6 +73,8 @@ class CompressTitleUseCase(private val scope: CoroutineScope) {
             return
         }
 
+        // keeps the process alive when the app goes to the background while compressing (K13)
+        val foregroundTask = ForegroundTasks.begin(context, tr("Compressing title"))
         compressJob = scope.launch {
             _stage.value = CompressionStage.STARTING
 
@@ -84,11 +88,13 @@ class CompressTitleUseCase(private val scope: CoroutineScope) {
 
                         if (currentProgress == null) {
                             _stage.value = null
+                            foregroundTask.end()
                             return@launch
                         }
 
                         val (current, total) = currentProgress
                         _progress.value = CompressionProgress(current, total)
+                        foregroundTask.setProgress(if (total > 0) current.toFloat() / total else null)
 
                         _totalFileCount.value =
                             NativeGameTitles.getCurrentCompressionTotalFileCount()
@@ -97,6 +103,7 @@ class CompressTitleUseCase(private val scope: CoroutineScope) {
 
                         if (currentStage == NativeGameTitles.CompressionStage.CANCELLED) {
                             _stage.value = null
+                            foregroundTask.end()
                             return@launch
                         }
 
@@ -114,6 +121,7 @@ class CompressTitleUseCase(private val scope: CoroutineScope) {
                     fd = fd.detachFd(),
                     callback = { result ->
                         progressJob?.cancel()
+                        foregroundTask.end()
 
                         when (result) {
                             NativeCompressResult.FINISHED -> callback(CompressResult.FINISHED)
@@ -124,6 +132,7 @@ class CompressTitleUseCase(private val scope: CoroutineScope) {
                     }
                 )
             } catch (_: Exception) {
+                foregroundTask.end()
                 callback(CompressResult.ERROR)
                 _stage.value = null
             }

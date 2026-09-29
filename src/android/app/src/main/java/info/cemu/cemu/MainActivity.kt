@@ -36,14 +36,19 @@ import info.cemu.cemu.games.gamesNavigation
 import info.cemu.cemu.graphicpacks.GraphicPacksRoute
 import info.cemu.cemu.graphicpacks.graphicPacksNavigation
 import info.cemu.cemu.nativeinterface.NativeGameTitles.Game
+import info.cemu.cemu.nativeinterface.NativeActiveSettings
 import info.cemu.cemu.nativeinterface.NativeErrors
+import info.cemu.cemu.nativeinterface.NativeGameTitles
 import info.cemu.cemu.nativeinterface.NativeSettings
 import info.cemu.cemu.settings.SettingsRoute
 import info.cemu.cemu.settings.settingsNavigation
 import info.cemu.cemu.titlemanager.TitleManagerRoute
 import info.cemu.cemu.titlemanager.titleManagerNavigation
+import info.cemu.cemu.titlemanager.usecases.InstallTitleUseCase
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlin.io.path.Path
 
 class MainActivity : AppCompatActivity() {
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
@@ -68,6 +73,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // a title install killed with the process leaves a partial title (and the old one as backup)
+        lifecycleScope.launch(Dispatchers.IO) {
+            if (InstallTitleUseCase.recoverInterruptedInstalls(Path(NativeActiveSettings.getMLCPath())))
+                NativeGameTitles.refreshCafeTitleList()
+        }
         setContent {
             TranslatableContent {
                 ActivityContent {
