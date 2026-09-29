@@ -102,6 +102,8 @@ fun EmulationScreen(
 
     val emulationError by viewModel.emulationError.collectAsState()
     val isEmulationInitialized by viewModel.isEmulationInitialized.collectAsState()
+    // initialization also finishes when it failed, the pad and second-screen offer only make sense on success
+    val isEmulationRunning = isEmulationInitialized && emulationError == null
     val sideMenuState by viewModel.sideMenuState.collectAsState()
     val isInputOverlayVisible by viewModel.isInputOverlayVisible.collectAsState()
     val inputOverlaySettings by viewModel.inputOverlaySettings.collectAsState()
@@ -110,8 +112,8 @@ fun EmulationScreen(
     val activity = LocalContext.current as? Activity
     val padDisplayId = if (activity != null) rememberPadDisplayId(activity) else null
 
-    LaunchedEffect(padDisplayId, isEmulationInitialized) {
-        if (padDisplayId == null || !isEmulationInitialized || !viewModel.shouldOfferSecondDisplay()) {
+    LaunchedEffect(padDisplayId, isEmulationRunning) {
+        if (padDisplayId == null || !isEmulationRunning || !viewModel.shouldOfferSecondDisplay()) {
             return@LaunchedEffect
         }
         viewModel.onSecondDisplayOffered()
@@ -222,7 +224,7 @@ fun EmulationScreen(
 
         EmulationSurfaces(
             viewModel = viewModel,
-            isEmulationInitialized = isEmulationInitialized,
+            isEmulationInitialized = isEmulationRunning,
             gameSurfaceViews = gameSurfaceViews,
             padDisplayId = padDisplayId,
         )

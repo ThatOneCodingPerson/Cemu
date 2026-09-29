@@ -29,7 +29,7 @@ When you fix an entry, update its status here and tick the matching item in TODO
 | A12 | H | `AndroidManifest.xml:~35` | EmulationActivity `configChanges` only has `orientation\|screenSize`, so a controller connecting, uiMode or display change recreates the activity mid-game | fixed 91f156d3 |
 | A13 | H | `EmulationActivity.kt` onQuit; `VulkanRenderer.cpp:2338-2366,815` | `exitProcess` runs without a flush. The pipeline cache is written in place (no temp + rename) with a 15 s delay, the size check misses same-size changes, and there's no final save | fixed eae0b51f |
 | A14 | M | `CemuApplication.kt` | `hash.txt` is written before the asset copy, so a kill mid-copy leaves the data permanently incomplete. All native init runs on the main thread. Two processes can race the copy | fixed eae0b51f |
-| A15 | L | `EmulationActivity.kt:~108`, `EmulationViewModel.kt` init, `NativeEmulation.cpp:~351` | Throws when there's no launch path (and the activity is exported). Sets `initialized=true` on failure. Every prepare error becomes UNKNOWN | partial 91f156d3 (missing path handled; error codes and the initialized flag remain) |
+| A15 | L | `EmulationActivity.kt:~108`, `EmulationViewModel.kt` init, `NativeEmulation.cpp:~351` | Throws when there's no launch path (and the activity is exported). Sets `initialized=true` on failure. Every prepare error becomes UNKNOWN | fixed 91f156d3 (missing path) + aaab5241 (INVALID_RPX/UNABLE_TO_MOUNT codes, JNI exception guard). The flag still means "initialization finished" (it hides the loading dialog); the pad and second-screen offer now also require no error (pending commit) |
 
 ## I: input (original audit)
 | ID | Sev | Where | Problem | Status |
@@ -85,19 +85,19 @@ When you fix an entry, update its status here and tick the matching item in TODO
 | K11 | M | `graphicpacks/GraphicPacksDownloader.kt:45,93-101` | The HttpClient is never closed, and the whole zip is held in a ByteArray (OOM risk) | fixed eae0b51f (client closed; zip still downloaded into memory, ~20–30 MB, acceptable) |
 | K12 | H | main-thread I/O | `MainActivity.kt:70-78` saveSettings on pause; `TitleListViewModel.kt:186,226`; `GraphicPacksViewModel` init; `GamesListScreen.kt:360` calls `titleHasShaderCacheFiles` during composition | deferred (reviewed: small, bounded I/O; revisit if ANRs show up) |
 | K13 | M | `titlemanager/usecases/InstallTitleUseCase.kt:95-97,178-193` | Backup and restore run on `viewModelScope` with no foreground service. If the process dies mid-install, the title is left partial or orphaned | open |
-| K14 | M | `titlemanager/TitleListViewModel.kt:229-232` | Compression uses the *filtered* title list, so updates and DLC hidden by the filter are silently dropped from the WUA | open |
-| K15 | M | `settings/account/AccountsViewModel.kt:92-100`, `AccountsScreen.kt:84-88` | Deleting the active account leaves the config pointing at it. Edits are only saved in `onDispose` | open |
+| K14 | M | `titlemanager/TitleListViewModel.kt:229-232` | Compression uses the *filtered* title list, so updates and DLC hidden by the filter are silently dropped from the WUA | fixed c27e208b |
+| K15 | M | `settings/account/AccountsViewModel.kt:92-100`, `AccountsScreen.kt:84-88` | Deleting the active account leaves the config pointing at it. Edits are only saved in `onDispose` | fixed c27e208b (next account becomes active; network service refreshed). Edits saved only in onDispose: still open, low risk |
 | K16 | M | `EmulationActivity.kt:118` | After recreation, a new `InputDelegateManager` starts with motion off while the UI shows it on | open |
 | K17 | M | `common/settings/Settings.kt` + `InputOverlaySurfaceView.kt:309-322` | Overlay rects are absolute pixels and never clamped, so they break across screen sizes and displays | open |
-| K18 | M | `GamesListViewModel.kt:41-46`, `TitleListViewModel.kt:99-139` | `_x.value += …` from native threads loses updates | open |
+| K18 | M | `GamesListViewModel.kt:41-46`, `TitleListViewModel.kt:99-139` | `_x.value += …` from native threads loses updates | fixed c27e208b |
 | K19 | M | `emulation/input/ControllerCallbacks.kt:19-56` | `synchronized` on a field that is reassigned under the lock; the field isn't volatile | fixed ea67dfae |
 | K20 | M | `emulation/input/ControllerMotionHandler.kt:81,84` | Keeps a reference to the reused `SensorEvent.values` array | fixed ea67dfae |
 | K21 | M | `common/input/GamepadInput.kt:17-33` | Emits recycled `MotionEvent`/`KeyEvent` objects to a later collector, which can bind the wrong key. `hasKeySubscribers` checks the wrong flow | fixed ea67dfae |
 | K22 | M | `EmulationScreen.kt:125-127`, `HotkeyManager.kt:13` | Opening the drawer drops KEY_UP, so held buttons stick. `pressedKeys` is never cleared | fixed ea67dfae |
 | K23 | M | `emulation/input/DeviceMotionHandler.kt:24` | Rotation is only read in onResume, so a 180° flip inverts the gyro | fixed ea67dfae |
-| K24 | L | `emulation/EmulationTextInputDialog.kt:40,73` | The software keyboard dialog has no cancel path | open |
-| K25 | L | navigation `popBackStack()` everywhere | A double back-press can pop the start destination, leaving a blank screen | open |
-| K26 | M | `AndroidManifest.xml:15-18` | `allowBackup=true` with empty rules; keys, otp and seeprom can be backed up | open |
+| K24 | L | `emulation/EmulationTextInputDialog.kt:40,73` | The software keyboard dialog has no cancel path | blocked: the core swkbd HLE (`src/Cafe/OS/libs/swkbd/swkbd.cpp` `keyInput`) only handles BACKSPACE and RETURN, so there is no cancel result to send. Needs core work |
+| K25 | L | navigation `popBackStack()` everywhere | A double back-press can pop the start destination, leaving a blank screen | fixed c27e208b (`navigateBackSafely`) |
+| K26 | M | `AndroidManifest.xml:15-18` | `allowBackup=true` with empty rules; keys, otp and seeprom can be backed up | fixed c27e208b (cloud backup = DataStore + shared prefs only) |
 | K27 | L | `InputOverlaySurfaceView.kt:520-534,438-442` | Resize barely responds; `requestFocus()` is called on every layout | open |
 
 ## B: build and packaging
@@ -107,7 +107,7 @@ When you fix an entry, update its status here and tick the matching item in TODO
 | B2 | L | `src/Cafe/CMakeLists.txt:~660` | pkg-config path was only set for a WIN32 *target*, so building Android from a Windows host fails. Now uses `CMAKE_HOST_WIN32` | fixed 95337964 |
 | B3 | L | `.gitattributes` | `text=auto eol=lf` had no pattern, so `gradlew` and `*.sh` were CRLF. Targeted rules added | fixed 95337964 |
 | B4 | L | `vcpkg.json` | `hidapi` is listed unconditionally as well as `!android`, so it's built for Android anyway | fixed 95337964 |
-| B5 | L | Gradle `-DENABLE_NSYSHID_LIBUSB=OFF` | Referenced by no CMake file (libusb is still required) | open |
+| B5 | L | Gradle `-DENABLE_NSYSHID_LIBUSB=OFF` | Referenced by no CMake file (libusb is still required) | fixed 4392ec37 |
 | B6 | L | APK packaging | androidx dependencies ship `armeabi-v7a`/`x86` native libs, so the APK looks installable on 32-bit/x86 devices where `libCemuAndroid.so` is missing. Add `ndk { abiFilters += "arm64-v8a" }` to defaultConfig | fixed fe594253 |
 
 ## P: performance (not crashes)

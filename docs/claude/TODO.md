@@ -12,13 +12,15 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 **Working branch:** `android-stability` (from `android-port-dual` 564bfdad). It has no upstream. Ask before any push or merge.
 
 ## Current focus
-- **Phase 1 is built and awaiting the owner's device test.** APK: `dist/android/output/Cemu-0.5.1-92ecc623-dev.apk`.
 - Phases 1–6 are built and awaiting device tests (latest APK `dist/android/output/Cemu-latest-dev.apk`). Phase 7 research first pass is done.
-- Next:
-  - Owner device tests and logs.
-  - D1/D2 decision (SAF save sync design).
-  - Then the feature backlog, starting with the GPU driver fetcher.
-- **Blocker for the adb workflow:** the Thor has no USB debugging yet. As of 2026-09-28 it enumerates as MTP only (USB PID 4EE1) and `adb devices` is empty. The owner was asked to enable it.
+- **Session 2 (2026-09-28), in order:**
+  1. [?] Remaining open bugs: K14, K15, K18, K25, K26 (c27e208b), A15 (aaab5241 + pad/second-screen gate), B5 (4392ec37). K24 blocked: core swkbd has no cancel result.
+  2. [~] Backlog #1, the GPU driver fetcher.
+  3. Backlog #3, hotkeys.
+  4. Backlog #2, auto-map.
+- **Blocked on the owner:**
+  - Device tests: the Thor has no USB debugging. It is still MTP only at the start of session 2; `adb devices` is empty.
+  - The D1/D2 save-sync design decision (see Phase 3).
 
 ---
 
@@ -171,4 +173,4 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 - [x] Deleted the stray `%TEMP%\k.txt` left by a planning agent (2026-09-28)
 - [x] B4 `vcpkg.json` duplicate hidapi (95337964)
 - [x] B6 APK only packages arm64-v8a (fe594253)
-- [ ] B5 dead `ENABLE_NSYSHID_LIBUSB` flag
+- [x] B5 dead `ENABLE_NSYSHID_LIBUSB` flag (2026-09-28, 4392ec37)
