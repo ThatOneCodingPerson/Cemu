@@ -10,6 +10,11 @@
 #include "util/helpers/Serializer.h"
 #include "Cafe/HW/Latte/Common/RegisterSerializer.h"
 
+#if BOOST_PLAT_ANDROID
+#include <sys/resource.h>
+#include <unistd.h>
+#endif
+
 /* rects emulation */
 
 void rectsEmulationGS_outputSingleVertex(std::string& gsSrc, LatteDecompilerShader* vertexShader, LatteShaderPSInputTable* psInputTable, sint32 vIdx, const LatteContextRegister& latteRegister)
@@ -1132,6 +1137,11 @@ static void compilePipeline_thread(sint32 threadIndex)
 	// except for one thread which we always run at normal priority to prevent the opposite scenario where all compile threads are starved
 	if(threadIndex != 0)
 		SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+#elif BOOST_PLAT_ANDROID
+	// same on Android, where the PPC and GPU threads otherwise share the cores equally with up to 7 compile threads.
+	// The nice value is per thread on Linux; 10 is Android's THREAD_PRIORITY_BACKGROUND
+	if(threadIndex != 0)
+		setpriority(PRIO_PROCESS, gettid(), 10);
 #endif
 	while (!s_compileThreadsShutdownSignal)
 	{
