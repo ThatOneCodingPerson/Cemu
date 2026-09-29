@@ -48,6 +48,14 @@ class GeneralSettingsViewModel(
         }
     }
 
+    fun setSustainedPerformanceModeEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            dataStore.updateData {
+                it.copy(emulationSettings = it.emulationSettings.copy(isSustainedPerformanceModeEnabled = enabled))
+            }
+        }
+    }
+
     fun setTvScreenPercent(percent: Int) {
         viewModelScope.launch {
             dataStore.updateData {

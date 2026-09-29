@@ -23,6 +23,8 @@ data class EmulationSettings(
     val wasSecondDisplayOffered: Boolean = false,
     /** The TV's share of the screen in percent when the GamePad is shown next to it on the same screen. */
     val tvScreenPercent: Int = DEFAULT_TV_SCREEN_PERCENT,
+    /** Window.setSustainedPerformanceMode while emulating, on devices that support it. */
+    val isSustainedPerformanceModeEnabled: Boolean = false,
 )
 
 const val DEFAULT_TV_SCREEN_PERCENT = 50

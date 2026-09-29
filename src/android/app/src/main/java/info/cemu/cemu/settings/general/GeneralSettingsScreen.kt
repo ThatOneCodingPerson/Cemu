@@ -1,8 +1,10 @@
 package info.cemu.cemu.settings.general
 
+import android.os.PowerManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -12,6 +14,7 @@ import info.cemu.cemu.common.ui.components.Slider
 import info.cemu.cemu.common.ui.components.Button
 import info.cemu.cemu.common.ui.components.ScreenContent
 import info.cemu.cemu.common.ui.components.SingleSelection
+import info.cemu.cemu.common.ui.components.Toggle
 import info.cemu.cemu.common.ui.localization.tr
 import info.cemu.cemu.nativeinterface.NativeSettings
 
@@ -86,6 +89,18 @@ fun GeneralSettingsScreen(
             labelFormatter = { "$it%" },
             onValueChange = { viewModel.setTvScreenPercent(it) },
         )
+
+        val isSustainedPerformanceModeSupported = remember {
+            context.getSystemService(PowerManager::class.java)?.isSustainedPerformanceModeSupported == true
+        }
+        if (isSustainedPerformanceModeSupported) {
+            Toggle(
+                label = tr("Sustained performance mode"),
+                description = tr("Keeps the clock speeds at a level the device can hold without overheating: fewer sudden slowdowns in long sessions, but a lower peak"),
+                checked = emulationSettings.isSustainedPerformanceModeEnabled,
+                onCheckedChanged = { viewModel.setSustainedPerformanceModeEnabled(it) },
+            )
+        }
     }
 }
 

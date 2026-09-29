@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.hardware.display.DisplayManager
 import android.os.Bundle
+import android.os.PowerManager
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.WindowManager
@@ -130,6 +131,7 @@ class EmulationActivity : AppCompatActivity() {
         deviceStatusMonitor = DeviceStatusMonitor(this)
 
         setupHotkeys()
+        setupSustainedPerformanceMode()
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
@@ -219,6 +221,19 @@ class EmulationActivity : AppCompatActivity() {
                     .distinctUntilChanged()
                     .collect { HotkeyManager.setHotkeyMappings(it) }
             }
+        }
+    }
+
+    private fun setupSustainedPerformanceMode() {
+        val isSupported =
+            getSystemService(PowerManager::class.java)?.isSustainedPerformanceModeSupported == true
+        if (!isSupported) {
+            return
+        }
+        lifecycleScope.launch {
+            AppSettingsStore.dataStore.data.map { it.emulationSettings.isSustainedPerformanceModeEnabled }
+                .distinctUntilChanged()
+                .collect { window.setSustainedPerformanceMode(it) }
         }
     }
 
