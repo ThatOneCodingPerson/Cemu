@@ -227,6 +227,41 @@ Ours (76ac98f1) follows the same approach with one session.
 
 ---
 
+## 8. Shader caches: "compile shaders for a game" (owner request, 2026-09-29)
+**How Cemu's caches work** (sources, read 2026-09-29):
+- Primary source, our core:
+  - `LatteShaderCache.cpp`: `LatteShaderCache_Load` runs at Latte thread start (`LatteThread.cpp:203`), before the game's GX2 init.
+  - `VulkanPipelineStableCache.cpp`, `FileCache.h`.
+- Cemu 1.25.0 changelog (cemu.info/changelog/cemu_1_25_0.txt):
+  - The Vulkan pipeline cache is "independent of hardware and drivers and can therefore be transferred between different PCs".
+  - "Pipelines are directly tied to your shader cache. You need both caches to restore pipelines."
+- Community caches for "Cemu 1.25, 1.26 and Cemu 2.x" exist (chriztr.github.io/cemu_shader_and_pipeline_caches/). Our core is 2.x.
+
+**The layers (Android only uses Vulkan):**
+
+| File (under the cache path) | What it is | Portable? |
+|---|---|---|
+| `shaderCache/transferable/<titleid>_shaders.bin` | Every GX2 shader the game has used so far (the "shader list") | Yes, between devices, GPUs, drivers and desktop ↔ Android |
+| `shaderCache/transferable/<titleid>_vkpipeline.bin` | Every Vulkan pipeline state seen (needs the shaders file) | Yes |
+| `shaderCache/precompiled/<titleid>_spirv.bin` | The shaders translated to SPIR-V | Renderer-specific, GPU-independent |
+| `shaderCache/driver/vk/<titleid>.bin` | `VkPipelineCache` blob from the driver | **Only for this GPU and driver**; switching custom drivers (Turnip ↔ Qualcomm) means compiling again |
+
+- **At every boot,** `LatteShaderCache_Load` compiles every transferable entry for the current driver behind the "shader progress" screen, then the pipelines. That is the "compile all shaders" step.
+- **The "full list":** it can't be extracted from the game files. It grows while the game runs, so the most complete list comes from merging caches (your own plus shared ones).
+- **File version:** the `FileCache` header's "extra version" encodes the title id:
+  - Shaders: `((hi) + (lo)*3) + 1 + 0xe97af1ad`, plus a legacy value of 2 for 1.25.0–1.25.1b files.
+  - Pipelines: the same without the constant.
+
+  A file from another game fails to open, so an import can be validated by opening it the way the core does. Entries are keyed by hash (`name1`/`name2`), so two caches for the same title can be merged by adding the missing entries.
+
+**Plan:**
+1. **Import and merge** per game: pick `.bin` files (or a zip of them). Each is validated against the game's title id, its type is found by trying both versions, and missing entries are merged into the existing cache.
+2. **Export** both transferable files as a zip, for other devices or desktop.
+3. **"Compile shaders now":** launch the game in a compile-only mode. The Latte thread runs `LatteShaderCache_Load`; then the app saves the driver pipeline cache and exits before gameplay, reporting the counts.
+4. **Show counts** (shaders, pipelines, whether the driver cache exists).
+
+**Caveat:** don't import while the same game is running in the emulation process (D7: the main process can't see it); the UI warns.
+
 ## Gap table
 Only facts verified from the sources above are marked. `✓` = has it, `–` = verified absent, `?` = not verified yet, `partial` = see notes.
 
