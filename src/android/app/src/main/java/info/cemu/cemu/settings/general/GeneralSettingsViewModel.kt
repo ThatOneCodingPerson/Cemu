@@ -56,6 +56,14 @@ class GeneralSettingsViewModel(
         }
     }
 
+    fun setPreferredPadDisplayName(displayName: String?) {
+        viewModelScope.launch {
+            dataStore.updateData {
+                it.copy(emulationSettings = it.emulationSettings.copy(preferredPadDisplayName = displayName))
+            }
+        }
+    }
+
     fun setTvScreenPercent(percent: Int) {
         viewModelScope.launch {
             dataStore.updateData {

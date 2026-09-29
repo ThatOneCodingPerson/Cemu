@@ -123,7 +123,8 @@ fun EmulationScreen(
     // second display (dual-screen handheld like the AYN Thor, or an external monitor) for the GamePad, null if none
     val context = LocalContext.current
     val activity = context as? Activity
-    val padDisplayId = if (activity != null) rememberPadDisplayId(activity) else null
+    val preferredPadDisplayName by viewModel.preferredPadDisplayName.collectAsState()
+    val padDisplayId = if (activity != null) rememberPadDisplayId(activity, preferredPadDisplayName) else null
 
     LaunchedEffect(padDisplayId, isEmulationRunning) {
         if (padDisplayId == null || !isEmulationRunning || !viewModel.shouldOfferSecondDisplay()) {
@@ -791,8 +792,9 @@ private fun EmulationSurface(
     )
 }
 
+/** [preferredDisplayName]: Settings > General > GamePad display, used when several second screens are connected. */
 @Composable
-private fun rememberPadDisplayId(activity: Activity): Int? {
+private fun rememberPadDisplayId(activity: Activity, preferredDisplayName: String?): Int? {
     val displayManager =
         remember(activity) { activity.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager }
     var padDisplayId by remember { mutableStateOf<Int?>(null) }
@@ -800,7 +802,7 @@ private fun rememberPadDisplayId(activity: Activity): Int? {
     fun updatePadDisplay() {
         val padDisplay =
             if (activity.display.displayId == Display.DEFAULT_DISPLAY) {
-                DisplayUtils.getExternalDisplay(activity)
+                DisplayUtils.getExternalDisplay(activity, preferredDisplayName)
             } else {
                 DisplayUtils.getInternalDisplay(activity)
             }
@@ -810,7 +812,7 @@ private fun rememberPadDisplayId(activity: Activity): Int? {
         padDisplayId = padDisplay?.displayId
     }
 
-    DisposableEffect(displayManager, activity) {
+    DisposableEffect(displayManager, activity, preferredDisplayName) {
         val listener = object : DisplayManager.DisplayListener {
             override fun onDisplayAdded(displayId: Int) = updatePadDisplay()
             override fun onDisplayRemoved(displayId: Int) = updatePadDisplay()

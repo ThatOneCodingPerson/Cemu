@@ -21,14 +21,24 @@ object DisplayUtils {
         return displayManager.getDisplay(Display.DEFAULT_DISPLAY)
     }
 
-    fun getExternalDisplay(context: Context): Display? {
+    /** Displays that can show the GamePad (second screens, external monitors), in the system's order. */
+    fun getExternalDisplays(context: Context): List<Display> {
         val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         val internalDisplay = getInternalDisplay(context)
         val internalId = internalDisplay?.displayId ?: launchDisplayId
         return displayManager.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION)
-            .firstOrNull { display ->
+            .filter { display ->
                 display.displayId != internalId && display.isUsableExternalDisplay(internalDisplay)
             }
+    }
+
+    /**
+     * The display for the GamePad: the one named [preferredName] (Settings > General > GamePad display) if it is
+     * connected, otherwise the first one.
+     */
+    fun getExternalDisplay(context: Context, preferredName: String? = null): Display? {
+        val displays = getExternalDisplays(context)
+        return displays.firstOrNull { preferredName != null && it.name == preferredName } ?: displays.firstOrNull()
     }
 
     private fun Display.isUsableExternalDisplay(internalDisplay: Display?): Boolean {

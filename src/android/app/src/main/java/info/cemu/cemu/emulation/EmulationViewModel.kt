@@ -196,6 +196,10 @@ class EmulationViewModel(
         .map { it.emulationSettings.tvScreenPercent.coerceIn(TV_SCREEN_PERCENT_RANGE) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DEFAULT_TV_SCREEN_PERCENT)
 
+    /** Settings > General > GamePad display; null = the first second screen. */
+    val preferredPadDisplayName = dataStore.data.map { it.emulationSettings.preferredPadDisplayName }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     val gamePadPosition = dataStore.data.map { it.emulationSettings.gamePadPosition }
         .stateIn(
             viewModelScope,

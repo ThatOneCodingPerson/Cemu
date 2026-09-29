@@ -8,6 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.viewmodel.compose.viewModel
+import info.cemu.cemu.common.android.display.DisplayUtils
 import info.cemu.cemu.common.settings.GamePadPosition
 import info.cemu.cemu.common.settings.TV_SCREEN_PERCENT_RANGE
 import info.cemu.cemu.common.ui.components.Slider
@@ -79,6 +80,26 @@ fun GeneralSettingsScreen(
             choiceToString = { gamePadPositionToString(it) },
             choices = GamePadPosition.entries,
         )
+
+        // which second screen shows the GamePad ("External PAD screen" in the game menu) when several are connected;
+        // only offered with a second screen, or when one was chosen before
+        val externalDisplayNames = remember { DisplayUtils.getExternalDisplays(context).map { it.name }.distinct() }
+        val preferredPadDisplayName = emulationSettings.preferredPadDisplayName
+        if (externalDisplayNames.isNotEmpty() || preferredPadDisplayName != null) {
+            SingleSelection(
+                label = tr("GamePad display"),
+                choice = preferredPadDisplayName,
+                choices = listOf<String?>(null) + (externalDisplayNames + listOfNotNull(preferredPadDisplayName)).distinct(),
+                choiceToString = { displayName ->
+                    when (displayName) {
+                        null -> tr("Automatic (the first second screen found)")
+                        in externalDisplayNames -> displayName
+                        else -> tr("{0} (not connected)", displayName)
+                    }
+                },
+                onChoiceChanged = { viewModel.setPreferredPadDisplayName(it) },
+            )
+        }
 
         Slider(
             label = tr("TV screen size next to the GamePad"),
