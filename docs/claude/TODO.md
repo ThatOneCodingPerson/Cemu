@@ -17,8 +17,8 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
   1. [x] Commit the pending work: shader compile per game (706e1979), adaptive ADPF target (dbf60105).
   2. [x] Save states: feasibility write-up (#9, FEATURE_RESEARCH §10) (2026-09-29). **Owner decision needed:** port the Matt-Wood-23 branch as an experimental feature (yes/no, which games).
   3. [?] Graphics options (see "Graphics options" below): research, pre-rotation (P1), gamma, anisotropic filtering, AMD FSR 1 upscale filter (bc8d00b4), graphic packs per game (463bc6ab).
-  4. [ ] Per-game overlay layouts (#5).
-  5. [ ] Per vendor:product controller profiles (#2).
+  4. [?] Per-game overlay layouts (#5, 7c177945).
+  5. [?] Per vendor:product controller profiles (#2), see the backlog item.
   6. [ ] Display picker, with a Settings entry (#4), at the lowest priority.
 - **Owner decisions (2026-09-29):**
   - #6 single-file WUA/WUP install: dropped. Cemu runs .wua/.wud/.wux and WUP folders from a games folder, and adding that folder as a game path covers it.
@@ -271,9 +271,21 @@ The owner asked for "graphical settings that can help improvements for games eit
      - Download KIMCHI "Qualcomm Driver v840" on Android 13: "needs a newer Android version".
      - Airplane mode: error card + Retry. Leaving the screen mid-download leaves no `driver-download.zip` in the cache dir.
      - A non-Qualcomm phone has no Custom drivers entry at all (unchanged).
-2. [~] Controller auto-map with a "press A" layout prompt; auto-apply a default profile per vendor:product
+2. [?] Controller auto-map with a "press A" layout prompt; auto-apply a default profile per vendor:product
    - [?] "Press A" prompt in Map all inputs (A = button names, B = Wii U positions) + first-run auto-configure + auto-map while controller 1 is unmapped, with a setting (2026-09-28, 8e9a5094)
-   - [ ] Per vendor:product saved profiles (auto-apply when a *different* known controller connects). Joy-Con quirks (Azahar special-cases their partial A/B swap).
+   - [?] Per vendor:product saved profiles (2026-09-29, session 4): leaving Controller N's input settings, or an auto-map, records its mappings for the model (vendor:product:controller type) of each connected device it uses (`ControllerModelProfiles`, AppSettings).
+     - When controller 1's devices are all disconnected and a gamepad with a saved model profile is connected (another unit of the same model, or a model used before), controller 1 is re-targeted to it (native `applyControllerMappings`), with a toast.
+     - The switch only happens if every old device can get its mappings back later (its model is recorded), so nothing is lost. The same rule applies to the first mapping of an unmapped controller 1.
+     - **Not done:**
+       - Deadzones and other per-device settings aren't part of the profile.
+       - No switch while a mapped device is still connected (e.g. the Thor's built-in controls stay controller 1 when a Bluetooth pad connects).
+       - Joy-Con quirks.
+     - **Device test:**
+       - Map controller 1 to pad A (Map all inputs or by hand), leave the input settings.
+       - Disconnect A, connect pad B of a different model and map it the same way, leave.
+       - Disconnect B, reconnect A while the game list is open: toast "Controller 1 now uses … with the layout last used for this model", and A works in a game with its old mappings.
+       - With a second unit of A's model: it gets A's layout.
+       - A pad that was never mapped still gets the by-name auto-map (only if controller 1 has no mappings).
      - **Design note (2026-09-29):** a saved profile binds its mappings to one unit's `InputDevice.descriptor` (the native controller `uuid`). Another unit of the same model has a different descriptor, so applying "this model's profile" needs a native re-target step: replace the Android controller's uuid/name, keep the mappings. `NativeInput.cpp` `GetOrCreateController` / `getMotionEnabledControllerDescriptors` show the pattern.
    - **Device test:**
      - Fresh install of Cemu Dev on the Thor:
@@ -306,13 +318,19 @@ The owner asked for "graphical settings that can help improvements for games eit
        - Touch on both surfaces still hits the right spots.
    - [ ] Display picker + per-display memory, with a Settings entry (only matters with 2+ candidate displays, e.g. Thor + HDMI). Lowest priority.
    - Not planned (owner, 2026-09-29): mirror the main screen, input overlay on the second screen. The performance overlay already draws on both screens (`LatteOverlay_render(isPadView)`).
-5. [~] Per-game controller profiles and overlay layouts
+5. [?] Per-game controller profiles and overlay layouts
    - [?] Named controller profiles (Controller N > Profiles: save/load/delete) + "Controller N profile" in Edit game profile, using the core's `[Controller]` game profile support (2026-09-29, 89469694)
      - **Device test:**
        - Save profile "A", change mappings, save "B".
        - Load "A": the old mappings (and type) are back. Mapping a button right after loading works (the cached controller is reloaded).
        - Pick "B" as Controller 1 profile in a game's profile: that game uses B, other games use the normal configuration.
-   - [~] Per-game overlay layouts (session 4)
+   - [?] Per-game overlay layouts (2026-09-29, 7c177945): in-game menu > "Separate input layout for this game". On: the game gets a copy of the current layout, and Edit inputs / Reset input overlay then only change that copy. Off: back to the shared layout.
+     - **Device test:**
+       - In game A, turn it on, move some buttons (Edit inputs).
+       - Quit, start game B: B has the old shared layout.
+       - Start A again: A has the moved buttons, and the checkbox is on.
+       - Turn it off in A: the shared layout is back.
+       - Reset input overlay in A with it on: only A's layout resets.
 6. [?] Save backup/restore per title. (Single-file WUA/WUP install: dropped by the owner 2026-09-29; a games folder already runs these files.)
    - [?] Title manager > save entry menu > Export save (zip) / Import save (confirm, staged, rollback; marks the save mirror dirty with a custom root) (2026-09-29, 30c39093)
      - **Device test:**

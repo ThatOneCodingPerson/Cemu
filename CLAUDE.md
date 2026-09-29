@@ -22,10 +22,10 @@
 
    Update the matching BUGS.md entry (status + commit).
 4. **Every phase ends with an APK.**
-   - Build with `dist/android/build-apk.ps1 -Install`, which puts "Cemu Dev" on the connected Thor.
+   - Build with `dist/android/build-apk.ps1` (dev).
+   - Since 2026-09-29 the owner installs and tests the APKs themselves: don't connect over adb, use `-Install` or run `pull-logs.ps1` unless they ask.
    - Give the owner the APK path plus a short device test list (Thor dual screen + a single-screen phone).
    - Mark items `[?]` until the owner confirms they work on a device.
-   - After the owner tests, pull logs with `dist/android/pull-logs.ps1`.
 5. **End of session:** append a SESSION_LOG.md entry (done / next / open questions). Update this file if the map or invariants changed.
 6. **Git:**
    - Commit locally, one logical fix group per commit.
@@ -120,7 +120,19 @@
 - **Long tasks** (install, compression): wrap them in `ForegroundTasks.begin(...)`/`end()` (a dataSync foreground service), and make them resumable after process death (see the `.installing`/`.backup` order in `InstallTitleUseCase`).
 - **Key cache:** `g_keyCache` is append-only (a deque) because `KeyCache_Reload` adds keys while the title scan reads them; never clear it outside `KeyCache_Prepare`.
 - **Controller profiles:** after `InputManager::load` replaces an emulated controller, call `EmulatedControllerManager::GetController(i).Reload()`, or later edits go to the discarded object.
-- **Android-only core additions** (overlay battery/thermal/frame time, KeyCache_Reload, `Latte_SetPrecompileOnly`, `FileCache_WaitForAsyncWrites`) sit behind `#if BOOST_PLAT_ANDROID` so desktop builds are unchanged.
+- **Android-only core additions** sit behind `#if BOOST_PLAT_ANDROID` so desktop builds are unchanged:
+  - overlay battery/thermal/frame time, KeyCache_Reload, `Latte_SetPrecompileOnly`, `FileCache_WaitForAsyncWrites`
+  - the config values `vk_pre_rotation`, `anisotropic_filter`, and the `kFsrEasuFilter` upscale filter
+  - `EmulatedController::get_mapping_button`
+- **Vulkan pre-rotation** (`SwapchainInfoVk`, opt-in `vkPreRotation`):
+  - With it on, a swapchain image can be rotated against the window. `getExtent()` is the image size; `getLogicalExtent()` is the window size.
+  - Everything is still laid out in window coordinates and mapped at the end: `ToImageViewport` for the output quad (plus the vertex shader's specialization constant), `RotateImguiDrawData` for ImGui.
+  - Output shaders must use `passUV`, not `gl_FragCoord`.
+  - Anything new drawn into the swapchain needs the same mapping.
+- **Per-game app settings keyed by title:** use `NativeEmulation.getForegroundTitleId()` (0 = unknown, e.g. a standalone RPX) and the 16-hex-digit key `titleIdKey()`. The input overlay's `perGameRectMaps` is the example.
+- **Controller model profiles** (`common/input/ControllerModelProfiles.kt`):
+  - Recorded and applied in the main process only.
+  - Never re-target controller 1 unless every mapped device's model has a profile. `chooseModelProfileTarget` enforces this and has unit tests.
 - **Save sync (custom data root):** every SAF import/export goes through `SaveSyncCoordinator`. It uses a process-local mutex plus the cross-process lock `noBackupFilesDir/save-sync.lock`; nothing runs on the main thread.
   - A dirty mirror is the newest copy, and the startup sync exports it rather than importing over it. So `markSavesDirty` must wait for `awaitStartupSync()`.
   - The process running a game holds `emulation-session.lock`; the other process checks `EmulationSessionState.isEmulationRunning(context)`.
