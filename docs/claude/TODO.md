@@ -16,7 +16,7 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 - **Session 2 (2026-09-28), in order:**
   1. [?] Remaining open bugs: K14, K15, K18, K25, K26 (c27e208b), A15 (aaab5241 + pad/second-screen gate), B5 (4392ec37). K24 blocked: core swkbd has no cancel result.
   2. [?] Backlog #1, the GPU driver fetcher (e8efeb45).
-  3. Backlog #3, hotkeys.
+  3. [?] Backlog #3, hotkeys (1c18255f).
   4. Backlog #2, auto-map.
 - **Blocked on the owner:**
   - Device tests: the Thor has no USB debugging. It is still MTP only at the start of session 2; `adb devices` is empty.
@@ -167,7 +167,18 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
      - Airplane mode: error card + Retry. Leaving the screen mid-download leaves no `driver-download.zip` in the cache dir.
      - A non-Qualcomm phone has no Custom drivers entry at all (unchanged).
 2. [ ] Controller auto-map with a "press A" layout prompt; auto-apply a default profile per vendor:product
-3. [ ] More hotkeys: swap screens, toggle pad, pause, screenshot
+3. [?] More hotkeys: swap screens, toggle pad, pause, screenshot, toggle input overlay (2026-09-28, 1c18255f)
+   - **Device test:**
+     - Map each new action in Settings > Input > Hotkeys (e.g. Select+L, Select+R …) and use it in-game.
+     - Pause from the menu and by hotkey:
+       - The "Paused" badge shows, game and audio stop.
+       - Home, then return: the game is still paused. Resume: it continues.
+     - Screenshot (menu and hotkey):
+       - "Screenshot saved to Pictures/Cemu" appears, and the image is in the gallery.
+       - While paused it says "Resume the game to take a screenshot".
+       - Repeated presses don't crash.
+     - Swap screens / toggle PAD / toggle overlay hotkeys behave like the menu checkboxes (Thor: with the PAD on the bottom screen too).
+   - **Not done:** fast-forward/speed toggle (the core has no speed-up path) and default hotkey combos (part of auto-map, #2).
 4. [ ] Dual-screen polish: display picker, mirror the TV, overlay on the second screen, split ratio
 5. [ ] Per-game controller profiles and overlay layouts
 6. [ ] Save backup/restore per title; single-file WUA/WUP install picker
