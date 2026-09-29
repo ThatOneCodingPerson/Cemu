@@ -69,8 +69,11 @@ import info.cemu.cemu.titlemanager.usecases.CompressionProgress
 import info.cemu.cemu.titlemanager.usecases.CompressionStage
 import info.cemu.cemu.titlemanager.usecases.DeleteResult
 import info.cemu.cemu.titlemanager.usecases.InstallResult
+import info.cemu.cemu.titlemanager.usecases.SaveBackupUseCase
+import info.cemu.cemu.titlemanager.usecases.SaveImportResult
 import kotlinx.coroutines.launch
 import java.text.MessageFormat
+import java.time.LocalDate
 
 @Composable
 fun TitleManagerScreen(
@@ -126,6 +129,36 @@ fun TitleManagerScreen(
                 onInvalidTitle = {
                     showNotificationMessage(tr("Invalid title"))
                 })
+        }
+
+    var saveToExport by remember { mutableStateOf<TitleEntry?>(null) }
+    var saveToImport by remember { mutableStateOf<TitleEntry?>(null) }
+    var saveImportToConfirm by remember { mutableStateOf<TitleEntry?>(null) }
+
+    val exportSaveLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+            val entry = saveToExport ?: return@rememberLauncherForActivityResult
+            saveToExport = null
+            if (uri == null) return@rememberLauncherForActivityResult
+            coroutineScope.launch {
+                val exported = SaveBackupUseCase.export(context, entry.path, uri)
+                showNotificationMessage(if (exported) tr("Save exported") else tr("Failed to export the save"))
+            }
+        }
+
+    val importSaveLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            val entry = saveToImport ?: return@rememberLauncherForActivityResult
+            saveToImport = null
+            if (uri == null) return@rememberLauncherForActivityResult
+            coroutineScope.launch {
+                val message = when (SaveBackupUseCase.import(context, entry.path, uri)) {
+                    SaveImportResult.IMPORTED -> tr("Save imported")
+                    SaveImportResult.NOT_A_SAVE_BACKUP -> tr("The file isn't a save backup (no user or meta folder)")
+                    SaveImportResult.ERROR -> tr("Failed to import the save")
+                }
+                showNotificationMessage(message)
+            }
         }
 
     val compressFileLauncher =
@@ -190,10 +223,35 @@ fun TitleManagerScreen(
                 },
                 onCompressRequested = {
                     titleListViewModel.queueTitleForCompression(it)
-                }
+                },
+                onExportSaveRequested = {
+                    saveToExport = it
+                    exportSaveLauncher.launch(saveBackupFileName(it))
+                },
+                onImportSaveRequested = { saveImportToConfirm = it },
             )
         }
     }
+    saveImportToConfirm?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { saveImportToConfirm = null },
+            title = { Text(tr("Import save")) },
+            text = {
+                Text(tr("Replace the save of {0} with a backup? The current save is overwritten. Close the game first.", entry.name))
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    saveImportToConfirm = null
+                    saveToImport = entry
+                    importSaveLauncher.launch(arrayOf("application/zip", "application/x-zip-compressed"))
+                }) { Text(tr("Choose backup")) }
+            },
+            dismissButton = {
+                TextButton(onClick = { saveImportToConfirm = null }) { Text(tr("Cancel")) }
+            },
+        )
+    }
+
     if (showFilterSheet) {
         TitleFilterBottomSheet(
             filter = filter,
@@ -585,11 +643,19 @@ fun FilterChip(label: String, selected: Boolean, onToggle: () -> Unit) {
     )
 }
 
+private fun saveBackupFileName(entry: TitleEntry): String {
+    val date = LocalDate.now().toString()
+    val name = entry.name.replace(Regex("[/\\\\:*?\"<>|\\p{Cntrl}]"), "_")
+    return "$name [${"%016X".format(entry.titleId)}] save $date.zip"
+}
+
 @Composable
 private fun TitleEntryListItem(
     titleEntry: TitleEntry,
     onDeleteRequest: () -> Unit,
     onCompressRequested: () -> Unit,
+    onExportSaveRequested: () -> Unit,
+    onImportSaveRequested: () -> Unit,
 ) {
     var showDeleteConfirmationDialog by rememberSaveable { mutableStateOf(false) }
 
@@ -622,7 +688,9 @@ private fun TitleEntryListItem(
             TitleDropDownMenu(
                 titleEntry = titleEntry,
                 onDeleteClicked = { showDeleteConfirmationDialog = true },
-                onCompressClicked = onCompressRequested
+                onCompressClicked = onCompressRequested,
+                onExportSaveClicked = onExportSaveRequested,
+                onImportSaveClicked = onImportSaveRequested,
             )
             IconButton(
                 onClick = { showTitleInfo = !showTitleInfo }) {
@@ -651,6 +719,8 @@ private fun TitleDropDownMenu(
     titleEntry: TitleEntry,
     onDeleteClicked: () -> Unit,
     onCompressClicked: () -> Unit,
+    onExportSaveClicked: () -> Unit,
+    onImportSaveClicked: () -> Unit,
 ) {
     var expandMenu by rememberSaveable { mutableStateOf(false) }
 
@@ -676,6 +746,10 @@ private fun TitleDropDownMenu(
             expanded = expandMenu,
             onDismissRequest = { expandMenu = false }) {
             DropdownMenuItem(tr("Delete"), onDeleteClicked)
+            if (titleEntry.type == EntryType.Save) {
+                DropdownMenuItem(tr("Export save"), onExportSaveClicked)
+                DropdownMenuItem(tr("Import save"), onImportSaveClicked)
+            }
             if (titleEntry.type != EntryType.Save && titleEntry.format != EntryFormat.WUA)
                 DropdownMenuItem(
                     tr("Convert to WUA"),
