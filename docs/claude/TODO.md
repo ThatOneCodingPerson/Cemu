@@ -16,7 +16,7 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 - **Owner feedback (session 3 start, 2026-09-28):** "so far it's doing pretty great". Testing on their own devices went well, and no specific regressions were reported. Items stay `[?]` until confirmed individually. The owner asked to keep working through the list.
 - **Blocked on the owner:**
   - Device tests over adb: the Thor has no USB debugging (MTP only, `adb devices` empty through session 3).
-  - The D1/D2 save-sync design decision (see Phase 3); D7 goes with it.
+  - (D1/D2 decided 2026-09-29: option (a), background sync gated by a "Syncing saves…" screen; in progress.)
 - **Session 2 (2026-09-28):**
   - [?] Open bugs: K14, K15, K18, K25, K26 (c27e208b), A15 (aaab5241, 08ddc021), B5 (4392ec37).
   - [?] Driver fetcher (e8efeb45), hotkeys (1c18255f), auto-map (8e9a5094).
@@ -103,7 +103,7 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 - [?] Swap screens applied on the GPU thread (D5, N9)
 - [?] ViewModel: callbacks only publish; pause and resume follow the main surface; a title launched in the background gets paused (K3)
 - [?] Presentation keyed on display id (D4); `InvalidDisplayException` caught (D6)
-- [ ] A15 leftovers: `initialized` flag semantics and error codes (Phase 3)
+- [x] A15 leftovers: error codes (aaab5241) and the `initialized` flag semantics (08ddc021) (2026-09-28)
 - **Device test:** run the matrix in PHASE2_DESIGN.md. The most important cases:
   1. Rotate (if unlocked), press Home and return, 20 times in a row, mid-game: no crash, no freeze, and the game resumes with sound.
   2. While a game loads, press Home, wait 10 s, then return: the game should not be running in the background (no audio). It continues when you're back.
@@ -123,7 +123,7 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 - [?] Manifest `configChanges` (A12); missing launch path handled (A15, partial); relaunch while running attaches to the running title (K2)
 - [?] Pipeline cache: atomic write, flush on quit (2 s max), save on pause (A13)
 - [?] Data files: hash written last, cross-process file lock (A14)
-- [!] **D1/D2 need an owner decision:** SAF save sync runs synchronously on the main thread at startup (every process, including each game launch) and on quit/background. The fix needs a design choice:
+- [~] **D1/D2: the owner chose option (a)** (2026-09-29, "let's continue working on that" in reply to the recommendation). SAF save sync runs synchronously on the main thread at startup (every process, including each game launch) and on quit/background. The options were:
   - (a) keep the sync but run it on a background thread, and gate game launch and the save UI on its completion (a "Syncing saves…" screen), or
   - (b) only sync in the main process and before launch, with a progress dialog.
   - Don't just move it off the main thread: a game could read or write saves mid-import and the export could overwrite newer data.
@@ -131,7 +131,7 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 - [?] Kotlin crash fixes K1, K4, K5, K6, K7, K8, K9, K10, K11
 - [?] Native races N10, N11, N12
 - [ ] D7 cross-process "is emulation running" state (main process can't see the emulation process)
-- [ ] K13 title install: foreground service / WorkManager; K14 WUA compression uses the filtered list; K15 account deletion
+- [?] K13 title install foreground service + recovery (6d877933); K14 WUA compression uses the filtered list, K15 account deletion (c27e208b)
 - **Device test:**
   1. Revoke the games folder permission (Android settings → app → storage), open the game list: no crash, just no games.
   2. A game folder or file name with emoji or non-Latin characters shows correctly and launches.
@@ -146,7 +146,7 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 - [x] CanvasOnTouchListener re-verified by review (I1, fixed on the dual branch)
 - [?] Drawer open and activity pause release held controller keys and axes; hotkey state reset (K22)
 - [?] Gyro follows 180° flips (K23); `SensorEvent` copy (K20); binding UI event copies (K21); rumble callbacks lock (K19); null input device
-- [ ] K16 motion toggle after activity recreation (rare now that config changes don't recreate)
+- [?] K16 motion toggle after activity recreation (76d76442)
 - **Device test:**
   1. Touch the game screen with one finger, then press A with another: A registers.
   2. Hold a button, swipe down the notification shade: the button releases.
@@ -161,7 +161,8 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 - [?] Per-display pad DPI: `setPadDPI` from `PadPresentation`, reset when the pad returns to the main display (P10), fe594253
 - [?] Swap screens persisted; a one-time "Second screen detected: show GamePad there" snackbar, fe594253
 - [?] Single-screen devices: "External PAD screen" and "Rotate external screen left" are hidden without a second display, fe594253
-- [ ] Split ratio setting for the inline pad (instead of a fixed 50/50); display picker when there are 2+ candidates
+- [?] Split ratio setting for the inline pad (adf22428)
+- [ ] Display picker when there are 2+ candidates (backlog #4)
 - **Device test:**
   - Thor: 120 Hz main screen not throttled when the pad is on the bottom screen (overlay FPS).
   - Pad touch maps correctly; the pad notifications are sized right on the bottom screen.
@@ -174,7 +175,7 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 - [?] ADPF performance hint session for the PPC and GPU threads, frame reports vs 16.67 ms (P2), 76ac98f1. Later: adaptive target for 30 fps titles; sustained-performance option
 - [ ] Vulkan pre-rotation (P1). Engine work; measure before and after on the Thor
 - [?] BotW fork path guarded (P6), 76ac98f1. P7 is wontfix (per-core CPU only, not exposed on Android)
-- [ ] Review pipeline compile thread count and priority (P9)
+- [?] Pipeline compile thread priority (P9, a6d42c74)
 - **Device test:**
   - Game launch is about 3 s faster (time from tap to first frame).
   - Logcat shows `ADPF performance hints: available` on the Thor.
@@ -187,6 +188,7 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 - [ ] Fill the remaining `?` cells of the gap table (web search was rate-limited on 2026-09-28)
 
 ## Owner requests
+- [~] **Shader compilation per game** (requested 2026-09-29): "compile shaders for game X" so the full shader list is ready ahead of play. Research how Cemu's caches work (transferable vs driver cache, Vulkan only on Android, per-driver compiled pipelines), then build it. See FEATURE_RESEARCH.md §8.
 - [?] **Keys file import** (requested 2026-09-29; 49c662ca): Settings > "Import keys file". Picks a `keys.txt` from anywhere (Android/data is locked on newer Android) and merges its keys into Cemu's `keys.txt` (new keys only, below an "imported from" comment). The keys are reloaded and the titles rescanned, so no restart is needed.
   - **Device test:**
     - With a WUD/WUX in the games folder that doesn't show (missing key), import a keys.txt that has its key from Downloads: "Added N keys" and the game appears in the list without a restart. It launches.

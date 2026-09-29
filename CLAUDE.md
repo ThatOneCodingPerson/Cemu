@@ -44,7 +44,7 @@
   - The repo path has a space, so the script builds from a `subst` drive (letter saved in `dist/android/.build-drive`).
   - The first build compiles all vcpkg ports (long); later builds reuse vcpkg's binary cache.
   - `.gitattributes` forces LF for `*.sh` and `gradlew`.
-- **Tests:** `gradlew :app:testDevUnitTest` (JVM). This includes ArchUnit rules in `src/android/app/src/test/.../ArchitectureTests.kt`:
+- **Tests:** `gradlew :app:testDebugUnitTest` (JVM; AGP 9 has no unit-test task for the `dev` type). This includes ArchUnit rules in `src/android/app/src/test/.../ArchitectureTests.kt`:
   - Feature packages must not depend on each other.
   - `nativeinterface/` depends on no other app package.
 
