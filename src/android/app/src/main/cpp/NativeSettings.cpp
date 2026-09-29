@@ -304,6 +304,67 @@ Java_info_cemu_cemu_nativeinterface_NativeSettings_setAccurateBarriers([[maybe_u
 }
 
 extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeSettings_getVulkanPreRotation([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	return GetConfig().vk_pre_rotation;
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeSettings_setVulkanPreRotation([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jboolean enabled)
+{
+	GetConfig().vk_pre_rotation = enabled;
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT jint JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeSettings_getAnisotropicFilter([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	return GetConfig().anisotropic_filter;
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeSettings_setAnisotropicFilter([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jint level)
+{
+	GetConfig().anisotropic_filter = std::clamp<sint32>(level, 0, 4);
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeSettings_isOverrideGameGammaEnabled([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	return GetConfig().overrideAppGammaPreference;
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeSettings_setOverrideGameGammaEnabled([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jboolean enabled)
+{
+	GetConfig().overrideAppGammaPreference = enabled;
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT jfloat JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeSettings_getTargetGamma([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	return GetConfig().overrideGammaValue;
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeSettings_setTargetGamma([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jfloat gamma)
+{
+	GetConfig().overrideGammaValue = std::clamp(gamma, 0.1f, 4.0f);
+}
+
+// 0 = the display uses the piecewise sRGB curve
+extern "C" [[maybe_unused]] JNIEXPORT jfloat JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeSettings_getDisplayGamma([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	return GetConfig().userDisplayGamma;
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeSettings_setDisplayGamma([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jfloat gamma)
+{
+	GetConfig().userDisplayGamma = gamma <= 0.0f ? 0.0f : std::clamp(gamma, 0.1f, 4.0f);
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeSettings_getAudioDeviceEnabled([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jboolean tv)
 {
 	const auto& device = tv ? GetConfig().tv_device : GetConfig().pad_device;

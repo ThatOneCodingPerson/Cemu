@@ -925,6 +925,20 @@ void LatteRenderTarget_copyToBackbuffer(LatteTextureView* textureView, bool isPa
 	{
 		sint32 scaling_filter = downscaling ? GetConfig().downscale_filter : GetConfig().upscale_filter;
 
+#if BOOST_PLAT_ANDROID
+		if (scaling_filter == kFsrEasuFilter)
+		{
+			// FSR only upscales; bilinear when downscaling or if its shader didn't compile
+			if (!downscaling && RendererOutputShader::s_fsr_easu_shader)
+			{
+				shader = renderUpsideDown ? RendererOutputShader::s_fsr_easu_shader_ud : RendererOutputShader::s_fsr_easu_shader;
+				filter = LatteTextureView::MagFilter::kLinear;
+			}
+			else
+				scaling_filter = kLinearFilter;
+		}
+#endif
+
 		if (scaling_filter == kLinearFilter)
 		{
 			if(renderUpsideDown)

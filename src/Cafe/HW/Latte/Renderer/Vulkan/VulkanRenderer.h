@@ -445,6 +445,7 @@ private:
 	uint64 m_canvasAppliedGeneration[2]{};
 	bool m_canvasHasWindow[2]{};
 	std::chrono::steady_clock::time_point m_canvasRetryTime[2]{};
+	bool m_imguiMainWindow = true; // the canvas of the current ImguiBegin/ImguiEnd, for pre-rotation
 #else
 	std::atomic_flag m_destroyPadSwapchainNextAcquire{};
 #endif
@@ -519,6 +520,9 @@ private:
 		{
 			uint32 minUniformBufferOffsetAlignment = 256;
 			uint32 nonCoherentAtomSize = 256;
+#if BOOST_PLAT_ANDROID
+			float maxSamplerAnisotropy = 1.0f;
+#endif
 		}limits;
 
 		bool usingDebugMarkerTool{ false }; // validation layer or other tool capable of handling debug markers is used

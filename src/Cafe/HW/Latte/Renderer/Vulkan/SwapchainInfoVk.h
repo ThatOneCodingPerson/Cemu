@@ -55,6 +55,37 @@ struct SwapchainInfoVk
 		return m_actualExtent;
 	}
 
+	// the window's size. With Android pre-rotation getExtent() is the image size, in the display's natural orientation
+	VkExtent2D getLogicalExtent() const
+	{
+#if BOOST_PLAT_ANDROID
+		if (IsRotatedQuarterTurn())
+			return {m_actualExtent.height, m_actualExtent.width};
+#endif
+		return m_actualExtent;
+	}
+
+#if BOOST_PLAT_ANDROID
+	// Vulkan pre-rotation (developer.android.com/games/optimize/vulkan-prerotation): with
+	// CemuConfig::vk_pre_rotation the swapchain takes the display's current transform, so the compositor doesn't
+	// rotate every frame. The renderer keeps drawing in window coordinates and maps them to the image with these.
+	VkSurfaceTransformFlagBitsKHR m_preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+	// a present returned VK_SUBOPTIMAL_KHR: the display may have rotated. Android also returns it for every frame
+	// the compositor rotates, so it's only a reason to look
+	bool m_preTransformMayBeOutdated = false;
+
+	bool IsRotatedQuarterTurn() const
+	{
+		return m_preTransform & (VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR | VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR);
+	}
+	// clockwise, for the output shaders' specialization constant
+	sint32 GetPreRotationQuarterTurns() const;
+	void ToImagePosition(float& x, float& y) const;
+	void ToImageViewport(VkViewport& viewport) const;
+	// true if the swapchain should be recreated for a changed display rotation
+	bool IsPreTransformOutdated();
+#endif
+
 #if BOOST_PLAT_ANDROID
 	// only called on the Latte thread (see VulkanRenderer::SyncCanvasWindow), holds its own reference to window
 	SwapchainInfoVk(bool mainWindow, Vector2i size, ANativeWindow* window);
@@ -107,6 +138,9 @@ private:
 #if BOOST_PLAT_ANDROID
 	void RecreateSurface();
 	ANativeWindow* m_window = nullptr; // owned reference
+
+	VkSurfaceTransformFlagBitsKHR ChoosePreTransform(const VkSurfaceCapabilitiesKHR& capabilities) const;
+	uint32 m_callsSinceTransformCheck = 0;
 #endif
 
 	std::array<uint32, 2> m_swapchainQueueFamilyIndices;

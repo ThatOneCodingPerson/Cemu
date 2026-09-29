@@ -85,6 +85,9 @@ enum UpscalingFilter
 	kBicubicFilter,
 	kBicubicHermiteFilter,
 	kNearestNeighborFilter,
+#if BOOST_PLAT_ANDROID
+	kFsrEasuFilter, // AMD FidelityFX FSR 1 EASU, upscaling only
+#endif
 };
 
 enum FullscreenScaling
@@ -461,6 +464,12 @@ struct CemuConfig
 	ConfigValue<float> userDisplayGamma { 2.2f }; // 0 = sRGB, >0 gamma
 
 	ConfigValue<bool> vk_accurate_barriers{ true };
+#if BOOST_PLAT_ANDROID
+	// swapchains take the display's current transform, the output is rotated when presenting (SwapchainInfoVk)
+	ConfigValue<bool> vk_pre_rotation{ false };
+	// 0 = as the game requests, 1-4 = at least 2x/4x/8x/16x for linearly filtered textures
+	ConfigValue<sint32> anisotropic_filter{ 0 };
+#endif
 
 	struct
 	{

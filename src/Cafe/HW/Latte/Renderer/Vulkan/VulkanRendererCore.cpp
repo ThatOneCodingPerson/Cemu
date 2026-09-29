@@ -766,11 +766,23 @@ VkDescriptorSetInfo* VulkanRenderer::draw_getOrCreateDescriptorSet(PipelineInfo*
 
 			if (baseTexture->overwriteInfo.anisotropicLevel >= 0)
 				maxAniso = baseTexture->overwriteInfo.anisotropicLevel;
+#if BOOST_PLAT_ANDROID
+			// user override (Graphics settings): only for mipmapped, linearly filtered colour textures. Nearest filtered
+			// ones are meant to stay sharp (UI, pixel art), shadow maps compare depth
+			else if (const sint32 minimumAniso = GetConfig().anisotropic_filter; minimumAniso > 0 &&
+				m_featureControl.deviceFeatures.sampler_anisotropy && samplerInfo.minFilter == VK_FILTER_LINEAR &&
+				filterMip != Latte::LATTE_SQ_TEX_SAMPLER_WORD0_0::E_Z_FILTER::NONE &&
+				!shader->textureUsesDepthCompare[relative_textureUnit])
+				maxAniso = std::max<sint32>(maxAniso, minimumAniso);
+#endif
 
 			if (maxAniso > 0)
 			{
 				samplerInfo.anisotropyEnable = VK_TRUE;
 				samplerInfo.maxAnisotropy = (float)(1 << maxAniso);
+#if BOOST_PLAT_ANDROID
+				samplerInfo.maxAnisotropy = std::min(samplerInfo.maxAnisotropy, m_featureControl.limits.maxSamplerAnisotropy);
+#endif
 			}
 			else
 			{

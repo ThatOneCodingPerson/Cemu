@@ -346,6 +346,9 @@ void VulkanRenderer::GetDeviceFeatures()
 	m_featureControl.limits.minUniformBufferOffsetAlignment = std::max(prop2.properties.limits.minUniformBufferOffsetAlignment, (VkDeviceSize)4);
 	m_featureControl.limits.nonCoherentAtomSize = std::max(prop2.properties.limits.nonCoherentAtomSize, (VkDeviceSize)4);
 	cemuLog_log(LogType::Force, fmt::format("VulkanLimits: UBAlignment {0} nonCoherentAtomSize {1}", prop2.properties.limits.minUniformBufferOffsetAlignment, prop2.properties.limits.nonCoherentAtomSize));
+#if BOOST_PLAT_ANDROID
+	m_featureControl.limits.maxSamplerAnisotropy = std::max(prop2.properties.limits.maxSamplerAnisotropy, 1.0f);
+#endif
 }
 
 #if BOOST_OS_LINUX && !BOOST_PLAT_ANDROID // desktop Mesa RADV only; never fork() an Android app process
@@ -2162,6 +2165,9 @@ bool VulkanRenderer::ImguiBegin(bool mainWindow)
 		return false;
 
 	auto& chainInfo = GetChainInfo(mainWindow);
+#if BOOST_PLAT_ANDROID
+	m_imguiMainWindow = mainWindow;
+#endif
 
 	draw_endRenderPass();
 	m_state.currentPipeline = VK_NULL_HANDLE;
@@ -2173,9 +2179,39 @@ bool VulkanRenderer::ImguiBegin(bool mainWindow)
 	return true;
 }
 
+#if BOOST_PLAT_ANDROID
+// With pre-rotation the swapchain image is in the display's natural orientation, while ImGui lays out in window
+// coordinates: map the vertices and clip rectangles to the image. ImGui rebuilds the draw data every frame, so
+// changing it in place is fine.
+static void RotateImguiDrawData(ImDrawData* drawData, const SwapchainInfoVk& chainInfo)
+{
+	if (!drawData || chainInfo.GetPreRotationQuarterTurns() == 0)
+		return;
+	for (int listIndex = 0; listIndex < drawData->CmdListsCount; listIndex++)
+	{
+		ImDrawList* drawList = drawData->CmdLists[listIndex];
+		for (ImDrawVert& vertex : drawList->VtxBuffer)
+			chainInfo.ToImagePosition(vertex.pos.x, vertex.pos.y);
+		for (ImDrawCmd& command : drawList->CmdBuffer)
+		{
+			float x0 = command.ClipRect.x, y0 = command.ClipRect.y;
+			float x1 = command.ClipRect.z, y1 = command.ClipRect.w;
+			chainInfo.ToImagePosition(x0, y0);
+			chainInfo.ToImagePosition(x1, y1);
+			command.ClipRect = ImVec4(std::min(x0, x1), std::min(y0, y1), std::max(x0, x1), std::max(y0, y1));
+		}
+	}
+	const VkExtent2D imageExtent = chainInfo.getExtent();
+	drawData->DisplaySize = ImVec2((float)imageExtent.width, (float)imageExtent.height);
+}
+#endif
+
 void VulkanRenderer::ImguiEnd()
 {
 	ImGui::Render();
+#if BOOST_PLAT_ANDROID
+	RotateImguiDrawData(ImGui::GetDrawData(), GetChainInfo(m_imguiMainWindow));
+#endif
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), m_state.currentCommandBuffer);
 	vkCmdEndRenderPass(m_state.currentCommandBuffer);
 }
@@ -3013,6 +3049,10 @@ VkPipeline VulkanRenderer::backbufferBlit_createGraphicsPipeline(VkDescriptorSet
 	hash += (uint64)vertexRendererShader;
 	hash += (uint64)fragmentRendererShader;
 	hash += ((uint64)padView) << 1;
+#if BOOST_PLAT_ANDROID
+	const sint32 preRotation = chainInfo.GetPreRotationQuarterTurns();
+	hash += ((uint64)preRotation) << 2;
+#endif
 
 	const auto it = m_backbufferBlitPipelineCache.find(hash);
 	if (it != m_backbufferBlitPipelineCache.cend())
@@ -3024,6 +3064,14 @@ VkPipeline VulkanRenderer::backbufferBlit_createGraphicsPipeline(VkDescriptorSet
 
 	if (fragmentRendererShader)
 		shaderStages.emplace_back(CreatePipelineShaderStageCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT, fragmentRendererShader->GetShaderModule(), "main"));
+
+#if BOOST_PLAT_ANDROID
+	// constant 0 of the output vertex shader: quarter turns (RendererOutputShader::GetVulkanVertexSource)
+	const VkSpecializationMapEntry preRotationEntry{0, 0, sizeof(sint32)};
+	const VkSpecializationInfo preRotationInfo{1, &preRotationEntry, sizeof(sint32), &preRotation};
+	if (vertexRendererShader)
+		shaderStages[0].pSpecializationInfo = &preRotationInfo;
+#endif
 
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -3213,12 +3261,12 @@ bool VulkanRenderer::UpdateSwapchainProperties(bool mainWindow)
 		WindowSystem::GetWindowPhysSize(width, height);
 	else
 		WindowSystem::GetPadWindowPhysSize(width, height);
-	auto extent = chainInfo.getExtent();
+	auto extent = chainInfo.getLogicalExtent();
 	if (width != extent.width || height != extent.height)
 		stateChanged = true;
 
 #if BOOST_PLAT_ANDROID
-	if (chainInfo.surfaceWasLost)
+	if (chainInfo.surfaceWasLost || chainInfo.IsPreTransformOutdated())
 		stateChanged = true;
 #endif
 
@@ -3318,6 +3366,9 @@ void VulkanRenderer::SwapBuffer(bool mainWindow)
 #if BOOST_PLAT_ANDROID
 	if (result == VK_ERROR_SURFACE_LOST_KHR)
 		chainInfo.surfaceWasLost = true;
+	// Android also reports a transform that differs from the swapchain's this way (the display rotated)
+	if (result == VK_SUBOPTIMAL_KHR)
+		chainInfo.m_preTransformMayBeOutdated = true;
 #endif
 
 #if !BOOST_PLAT_ANDROID
@@ -3486,6 +3537,9 @@ void VulkanRenderer::DrawBackbufferQuad(LatteTextureView* texView, RendererOutpu
 	viewport.height = imageHeight;
 	viewport.minDepth = 0.0f;
 	viewport.maxDepth = 1.0f;
+#if BOOST_PLAT_ANDROID
+	chainInfo.ToImageViewport(viewport); // the quad itself is rotated by the vertex shader
+#endif
 	vkCmdSetViewport(m_state.currentCommandBuffer, 0, 1, &viewport);
 
 	VkRect2D scissor{};

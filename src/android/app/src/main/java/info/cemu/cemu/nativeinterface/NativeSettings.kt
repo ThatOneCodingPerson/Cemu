@@ -47,6 +47,9 @@ object NativeSettings {
         const val BICUBIC_FILTER: Int = 1
         const val BICUBIC_HERMITE_FILTER: Int = 2
         const val NEAREST_NEIGHBOR_FILTER: Int = 3
+
+        /** AMD FidelityFX FSR 1 (EASU). Upscaling only. */
+        const val FSR_EASU_FILTER: Int = 4
     }
 
     @JvmStatic
@@ -66,6 +69,55 @@ object NativeSettings {
 
     @JvmStatic
     external fun setAccurateBarriers(value: Boolean)
+
+    /** Vulkan pre-rotation: the swapchain takes the display's rotation, so the compositor doesn't rotate each frame. */
+    @JvmStatic
+    external fun getVulkanPreRotation(): Boolean
+
+    @JvmStatic
+    external fun setVulkanPreRotation(value: Boolean)
+
+    /** Minimum anisotropic filtering for textures the game filters linearly. */
+    object AnisotropicFilter {
+        const val GAME_DEFAULT: Int = 0
+        const val X2: Int = 1
+        const val X4: Int = 2
+        const val X8: Int = 3
+        const val X16: Int = 4
+    }
+
+    @JvmStatic
+    external fun getAnisotropicFilter(): Int
+
+    @JvmStatic
+    external fun setAnisotropicFilter(value: Int)
+
+    /** Ignore the gamma adjustment a game requests (GX2SetTVGamma). */
+    @JvmStatic
+    external fun isOverrideGameGammaEnabled(): Boolean
+
+    @JvmStatic
+    external fun setOverrideGameGammaEnabled(value: Boolean)
+
+    const val GAMMA_MIN: Float = 1.0f
+    const val GAMMA_MAX: Float = 4.0f
+    const val DEFAULT_GAMMA: Float = 2.2f
+
+    /** The TV gamma to reproduce. Higher is darker. */
+    @JvmStatic
+    external fun getTargetGamma(): Float
+
+    @JvmStatic
+    external fun setTargetGamma(value: Float)
+
+    /** The gamma of this device's screen; [DISPLAY_GAMMA_SRGB] for the piecewise sRGB curve. */
+    @JvmStatic
+    external fun getDisplayGamma(): Float
+
+    @JvmStatic
+    external fun setDisplayGamma(value: Float)
+
+    const val DISPLAY_GAMMA_SRGB: Float = 0.0f
 
     @JvmStatic
     external fun getAudioDeviceEnabled(tv: Boolean): Boolean

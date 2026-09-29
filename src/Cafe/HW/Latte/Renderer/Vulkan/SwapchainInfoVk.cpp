@@ -89,6 +89,16 @@ void SwapchainInfoVk::Create()
 #endif
 	m_surfaceFormat = ChooseSurfaceFormat(details.formats);
 	m_actualExtent = ChooseSwapExtent(details.capabilities);
+#if BOOST_PLAT_ANDROID
+	m_preTransform = ChoosePreTransform(details.capabilities);
+	m_preTransformMayBeOutdated = false;
+	m_callsSinceTransformCheck = 0;
+	// rotated by a quarter turn the images are in the display's natural orientation. currentExtent is in the current
+	// one (the guide swaps it); compare with the window instead of relying on that
+	if (IsRotatedQuarterTurn() && (m_actualExtent.width > m_actualExtent.height) == (m_desiredExtent.x > m_desiredExtent.y))
+		std::swap(m_actualExtent.width, m_actualExtent.height);
+	cemuLog_log(LogType::Force, "Vulkan: {} swapchain {}x{}, pre-rotation {} degrees", mainWindow ? "TV" : "GamePad", m_actualExtent.width, m_actualExtent.height, GetPreRotationQuarterTurns() * 90);
+#endif
 
 	// use at least two swapchain images. fewer than that causes problems on some drivers
 	uint32_t image_count = std::max(2u, details.capabilities.minImageCount);
@@ -481,7 +491,8 @@ VkSwapchainCreateInfoKHR SwapchainInfoVk::CreateSwapchainCreateInfo(VkSurfaceKHR
 	else
 		createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 #if BOOST_PLAT_ANDROID
-	createInfo.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+	// IDENTITY unless pre-rotation is enabled: then the compositor rotates each frame
+	createInfo.preTransform = m_preTransform;
 #else
 	createInfo.preTransform = swapchainSupport.capabilities.currentTransform;
 #endif
@@ -492,3 +503,92 @@ VkSwapchainCreateInfoKHR SwapchainInfoVk::CreateSwapchainCreateInfo(VkSurfaceKHR
 	cemuLog_logDebug(LogType::Force, "vulkan presentation mode: {}", createInfo.presentMode);
 	return createInfo;
 }
+
+#if BOOST_PLAT_ANDROID
+VkSurfaceTransformFlagBitsKHR SwapchainInfoVk::ChoosePreTransform(const VkSurfaceCapabilitiesKHR& capabilities) const
+{
+	if (!GetConfig().vk_pre_rotation)
+		return VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+	switch (capabilities.currentTransform)
+	{
+	case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:
+	case VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR:
+	case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:
+		if (capabilities.supportedTransforms & capabilities.currentTransform)
+			return capabilities.currentTransform;
+		break;
+	default:
+		break; // identity, or mirrored transforms (not used for displays)
+	}
+	return VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+}
+
+sint32 SwapchainInfoVk::GetPreRotationQuarterTurns() const
+{
+	switch (m_preTransform)
+	{
+	case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:
+		return 1;
+	case VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR:
+		return 2;
+	case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:
+		return 3;
+	default:
+		return 0;
+	}
+}
+
+// The content is rotated clockwise: the window's top left corner becomes the image's top right corner at 90 degrees,
+// its bottom right corner at 180 and its bottom left corner at 270
+void SwapchainInfoVk::ToImagePosition(float& x, float& y) const
+{
+	const float imageWidth = (float)m_actualExtent.width;
+	const float imageHeight = (float)m_actualExtent.height;
+	const float windowX = x;
+	const float windowY = y;
+	switch (m_preTransform)
+	{
+	case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:
+		x = imageWidth - windowY;
+		y = windowX;
+		break;
+	case VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR:
+		x = imageWidth - windowX;
+		y = imageHeight - windowY;
+		break;
+	case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:
+		x = windowY;
+		y = imageHeight - windowX;
+		break;
+	default:
+		break;
+	}
+}
+
+void SwapchainInfoVk::ToImageViewport(VkViewport& viewport) const
+{
+	float x0 = viewport.x;
+	float y0 = viewport.y;
+	float x1 = viewport.x + viewport.width;
+	float y1 = viewport.y + viewport.height;
+	ToImagePosition(x0, y0);
+	ToImagePosition(x1, y1);
+	viewport.x = std::min(x0, x1);
+	viewport.y = std::min(y0, y1);
+	viewport.width = std::abs(x1 - x0);
+	viewport.height = std::abs(y1 - y0);
+}
+
+bool SwapchainInfoVk::IsPreTransformOutdated()
+{
+	// querying the surface takes a fraction of a millisecond, look about once a second
+	if (!m_preTransformMayBeOutdated || !GetConfig().vk_pre_rotation || ++m_callsSinceTransformCheck < 60)
+		return false;
+	m_callsSinceTransformCheck = 0;
+	m_preTransformMayBeOutdated = false;
+	VkSurfaceCapabilitiesKHR capabilities;
+	if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physicalDevice, m_surface, &capabilities) != VK_SUCCESS)
+		return false;
+	return ChoosePreTransform(capabilities) != m_preTransform;
+}
+#endif

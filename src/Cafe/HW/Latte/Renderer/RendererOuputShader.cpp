@@ -243,6 +243,169 @@ fragment float4 main0(VertexOut in [[stage_in]], texture2d<float> textureSrc [[t
 }
 )";
 
+#if BOOST_PLAT_ANDROID
+// AMD FidelityFX Super Resolution 1 (FSR 1), EASU: edge adaptive spatial upsampling in a single pass. This is the
+// non-packed 32-bit path of ffx_fsr1.h v1.20210629 and the helpers it uses from ffx_a.h
+// (github.com/GPUOpen-Effects/FidelityFX-FSR), ported to plain GLSL for the output pass. The input viewport is the
+// whole source texture, so the EASU position constants reduce to passUV * textureSrcResolution - 0.5.
+//
+// Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+// documentation files (the "Software"), to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to the following conditions:
+// The above copyright notice and this permission notice shall be included in all copies or substantial portions of
+// the Software.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+// WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+// COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+const std::string RendererOutputShader::s_fsr_easu_shader_source =
+R"(
+// ffx_a.h approximations; unlike an exact 1/x they stay finite for 0, which EASU relies on in flat areas
+float APrxLoRcpF1(float a) { return uintBitsToFloat(uint(0x7ef07ebb) - floatBitsToUint(a)); }
+float APrxLoRsqF1(float a) { return uintBitsToFloat(uint(0x5f347d74) - (floatBitsToUint(a) >> uint(1))); }
+
+void FsrEasuTapF(inout vec3 aC, inout float aW, vec2 off, vec2 dir, vec2 len, float lob, float clp, vec3 c)
+{
+	// rotate the offset by the direction, anisotropy
+	vec2 v;
+	v.x = (off.x * ( dir.x)) + (off.y * dir.y);
+	v.y = (off.x * (-dir.y)) + (off.y * dir.x);
+	v *= len;
+	// distance^2, limited to the window
+	float d2 = min(v.x * v.x + v.y * v.y, clp);
+	// approximation of lanczos2 without sin(), rcp() or sqrt()
+	float wB = (2.0 / 5.0) * d2 - 1.0;
+	float wA = lob * d2 - 1.0;
+	wB *= wB;
+	wA *= wA;
+	wB = (25.0 / 16.0) * wB - (25.0 / 16.0 - 1.0);
+	float w = wB * wA;
+	aC += c * w;
+	aW += w;
+}
+
+// accumulates direction and length for one of the four bilinear positions
+void FsrEasuSetF(inout vec2 dir, inout float len, vec2 pp, bool biS, bool biT, bool biU, bool biV,
+	float lA, float lB, float lC, float lD, float lE)
+{
+	float w = 0.0;
+	if (biS) w = (1.0 - pp.x) * (1.0 - pp.y);
+	if (biT) w = pp.x * (1.0 - pp.y);
+	if (biU) w = (1.0 - pp.x) * pp.y;
+	if (biV) w = pp.x * pp.y;
+	float dc = lD - lC;
+	float cb = lC - lB;
+	float lenX = APrxLoRcpF1(max(abs(dc), abs(cb)));
+	float dirX = lD - lB;
+	dir.x += dirX * w;
+	lenX = clamp(abs(dirX) * lenX, 0.0, 1.0);
+	lenX *= lenX;
+	len += lenX * w;
+	float ec = lE - lC;
+	float ca = lC - lA;
+	float lenY = APrxLoRcpF1(max(abs(ec), abs(ca)));
+	float dirY = lE - lA;
+	dir.y += dirY * w;
+	lenY = clamp(abs(dirY) * lenY, 0.0, 1.0);
+	lenY *= lenY;
+	len += lenY * w;
+}
+
+void outputShader()
+{
+	vec2 texelSize = 1.0 / textureSrcResolution;
+	// position of 'f' in the source (the upper-left texel of the 2x2 bilinear footprint)
+	vec2 pp = passUV * textureSrcResolution - 0.5;
+	vec2 fp = floor(pp);
+	pp -= fp;
+	// 12-tap kernel, gathered in four 2x2 groups:
+	//    b c
+	//  e f g h
+	//  i j k l
+	//    n o
+	vec2 p0 = (fp + vec2(1.0, -1.0)) * texelSize;
+	vec2 p1 = p0 + vec2(-1.0, 2.0) * texelSize;
+	vec2 p2 = p0 + vec2(1.0, 2.0) * texelSize;
+	vec2 p3 = p0 + vec2(0.0, 4.0) * texelSize;
+	vec4 bczzR = textureGather(textureSrc, p0, 0);
+	vec4 bczzG = textureGather(textureSrc, p0, 1);
+	vec4 bczzB = textureGather(textureSrc, p0, 2);
+	vec4 ijfeR = textureGather(textureSrc, p1, 0);
+	vec4 ijfeG = textureGather(textureSrc, p1, 1);
+	vec4 ijfeB = textureGather(textureSrc, p1, 2);
+	vec4 klhgR = textureGather(textureSrc, p2, 0);
+	vec4 klhgG = textureGather(textureSrc, p2, 1);
+	vec4 klhgB = textureGather(textureSrc, p2, 2);
+	vec4 zzonR = textureGather(textureSrc, p3, 0);
+	vec4 zzonG = textureGather(textureSrc, p3, 1);
+	vec4 zzonB = textureGather(textureSrc, p3, 2);
+	// approximate luma (times 2)
+	vec4 bczzL = bczzB * 0.5 + (bczzR * 0.5 + bczzG);
+	vec4 ijfeL = ijfeB * 0.5 + (ijfeR * 0.5 + ijfeG);
+	vec4 klhgL = klhgB * 0.5 + (klhgR * 0.5 + klhgG);
+	vec4 zzonL = zzonB * 0.5 + (zzonR * 0.5 + zzonG);
+	float bL = bczzL.x;
+	float cL = bczzL.y;
+	float iL = ijfeL.x;
+	float jL = ijfeL.y;
+	float fL = ijfeL.z;
+	float eL = ijfeL.w;
+	float kL = klhgL.x;
+	float lL = klhgL.y;
+	float hL = klhgL.z;
+	float gL = klhgL.w;
+	float oL = zzonL.z;
+	float nL = zzonL.w;
+	vec2 dir = vec2(0.0);
+	float len = 0.0;
+	FsrEasuSetF(dir, len, pp, true, false, false, false, bL, eL, fL, gL, jL);
+	FsrEasuSetF(dir, len, pp, false, true, false, false, cL, fL, gL, hL, kL);
+	FsrEasuSetF(dir, len, pp, false, false, true, false, fL, iL, jL, kL, nL);
+	FsrEasuSetF(dir, len, pp, false, false, false, true, gL, jL, kL, lL, oL);
+	// normalize with approximation, and clean up close to zero
+	vec2 dir2 = dir * dir;
+	float dirR = dir2.x + dir2.y;
+	bool zro = dirR < (1.0 / 32768.0);
+	dirR = APrxLoRsqF1(dirR);
+	dirR = zro ? 1.0 : dirR;
+	dir.x = zro ? 1.0 : dir.x;
+	dir *= vec2(dirR);
+	// {0 to 2} to {0 to 1}, shaped with square
+	len = len * 0.5;
+	len *= len;
+	// stretch the kernel {1.0 vert|horz, to sqrt(2.0) on diagonal}
+	float stretch = (dir.x * dir.x + dir.y * dir.y) * APrxLoRcpF1(max(abs(dir.x), abs(dir.y)));
+	vec2 len2 = vec2(1.0 + (stretch - 1.0) * len, 1.0 - 0.5 * len);
+	// the window shifts from +/-{sqrt(2.0) to slightly beyond 2.0} with the amount of edge
+	float lob = 0.5 + ((1.0 / 4.0 - 0.04) - 0.5) * len;
+	float clp = APrxLoRcpF1(lob);
+	// accumulation, limited to the min/max of the 4 nearest texels (no ringing)
+	vec3 min4 = min(min(min(vec3(ijfeR.z, ijfeG.z, ijfeB.z), vec3(klhgR.w, klhgG.w, klhgB.w)), vec3(ijfeR.y, ijfeG.y, ijfeB.y)),
+		vec3(klhgR.x, klhgG.x, klhgB.x));
+	vec3 max4 = max(max(max(vec3(ijfeR.z, ijfeG.z, ijfeB.z), vec3(klhgR.w, klhgG.w, klhgB.w)), vec3(ijfeR.y, ijfeG.y, ijfeB.y)),
+		vec3(klhgR.x, klhgG.x, klhgB.x));
+	vec3 aC = vec3(0.0);
+	float aW = 0.0;
+	FsrEasuTapF(aC, aW, vec2( 0.0,-1.0) - pp, dir, len2, lob, clp, vec3(bczzR.x, bczzG.x, bczzB.x)); // b
+	FsrEasuTapF(aC, aW, vec2( 1.0,-1.0) - pp, dir, len2, lob, clp, vec3(bczzR.y, bczzG.y, bczzB.y)); // c
+	FsrEasuTapF(aC, aW, vec2(-1.0, 1.0) - pp, dir, len2, lob, clp, vec3(ijfeR.x, ijfeG.x, ijfeB.x)); // i
+	FsrEasuTapF(aC, aW, vec2( 0.0, 1.0) - pp, dir, len2, lob, clp, vec3(ijfeR.y, ijfeG.y, ijfeB.y)); // j
+	FsrEasuTapF(aC, aW, vec2( 0.0, 0.0) - pp, dir, len2, lob, clp, vec3(ijfeR.z, ijfeG.z, ijfeB.z)); // f
+	FsrEasuTapF(aC, aW, vec2(-1.0, 0.0) - pp, dir, len2, lob, clp, vec3(ijfeR.w, ijfeG.w, ijfeB.w)); // e
+	FsrEasuTapF(aC, aW, vec2( 1.0, 1.0) - pp, dir, len2, lob, clp, vec3(klhgR.x, klhgG.x, klhgB.x)); // k
+	FsrEasuTapF(aC, aW, vec2( 2.0, 1.0) - pp, dir, len2, lob, clp, vec3(klhgR.y, klhgG.y, klhgB.y)); // l
+	FsrEasuTapF(aC, aW, vec2( 2.0, 0.0) - pp, dir, len2, lob, clp, vec3(klhgR.z, klhgG.z, klhgB.z)); // h
+	FsrEasuTapF(aC, aW, vec2( 1.0, 0.0) - pp, dir, len2, lob, clp, vec3(klhgR.w, klhgG.w, klhgB.w)); // g
+	FsrEasuTapF(aC, aW, vec2( 1.0, 2.0) - pp, dir, len2, lob, clp, vec3(zzonR.z, zzonG.z, zzonB.z)); // o
+	FsrEasuTapF(aC, aW, vec2( 0.0, 2.0) - pp, dir, len2, lob, clp, vec3(zzonR.w, zzonG.w, zzonB.w)); // n
+	// normalize and dering
+	colorOut0 = vec4(min(max4, max(min4, aC * vec3(1.0 / aW))), 1.0);
+}
+)";
+#endif
+
 RendererOutputShader::RendererOutputShader(const std::string& vertex_source, const std::string& fragment_source)
 {
     std::string finalFragmentSrc;
@@ -291,6 +454,11 @@ RendererOutputShader* RendererOutputShader::s_bicubic_shader_ud;
 
 RendererOutputShader* RendererOutputShader::s_hermit_shader;
 RendererOutputShader* RendererOutputShader::s_hermit_shader_ud;
+
+#if BOOST_PLAT_ANDROID
+RendererOutputShader* RendererOutputShader::s_fsr_easu_shader;
+RendererOutputShader* RendererOutputShader::s_fsr_easu_shader_ud;
+#endif
 
 std::string RendererOutputShader::GetOpenGlVertexSource(bool render_upside_down)
 {
@@ -349,7 +517,13 @@ std::string RendererOutputShader::GetVulkanVertexSource(bool render_upside_down)
 		vertex_source <<
 			R"(#version 450
 layout(location = 0) out vec2 passUV;
-
+)";
+#if BOOST_PLAT_ANDROID
+		// Vulkan pre-rotation (SwapchainInfoVk::m_preTransform): quarter turns clockwise, set per pipeline
+		vertex_source << "layout(constant_id = 0) const int preRotation = 0;\n";
+#endif
+		vertex_source <<
+			R"(
 out gl_PerVertex
 {
    vec4 gl_Position;
@@ -384,6 +558,13 @@ void main(){
 	)";
 		}
 
+#if BOOST_PLAT_ANDROID
+		vertex_source <<
+			R"(	if( preRotation == 1 ) vPos = vec2(-vPos.y, vPos.x);
+	else if( preRotation == 2 ) vPos = -vPos;
+	else if( preRotation == 3 ) vPos = vec2(vPos.y, -vPos.x);
+)";
+#endif
 		vertex_source <<
 			R"(	passUV = vUV;
 	gl_Position = vec4(vPos, 0.0, 1.0);
@@ -520,6 +701,20 @@ void RendererOutputShader::InitializeStatic()
 
     	s_hermit_shader = new RendererOutputShader(vertex_source, s_hermite_shader_source);
     	s_hermit_shader_ud = new RendererOutputShader(vertex_source_ud, s_hermite_shader_source);
+#if BOOST_PLAT_ANDROID
+    	// optional: without it the FSR setting falls back to bilinear (LatteRenderTarget_copyToBackbuffer)
+    	try
+    	{
+    		s_fsr_easu_shader = new RendererOutputShader(vertex_source, s_fsr_easu_shader_source);
+    		s_fsr_easu_shader_ud = new RendererOutputShader(vertex_source_ud, s_fsr_easu_shader_source);
+    	}
+    	catch (const std::exception&)
+    	{
+    		cemuLog_log(LogType::Force, "The FSR 1 output shader failed to compile, the bilinear filter is used instead");
+    		delete s_fsr_easu_shader;
+    		s_fsr_easu_shader = nullptr;
+    	}
+#endif
     }
 }
 
@@ -533,4 +728,9 @@ void RendererOutputShader::ShutdownStatic()
 
 	delete s_hermit_shader;
 	delete s_hermit_shader_ud;
+#if BOOST_PLAT_ANDROID
+	delete s_fsr_easu_shader;
+	delete s_fsr_easu_shader_ud;
+	s_fsr_easu_shader = s_fsr_easu_shader_ud = nullptr;
+#endif
 }
