@@ -1,3 +1,4 @@
+#include <deque>
 #include <mutex>
 
 #include "Cemu/Logging/CemuLogging.h"
@@ -14,7 +15,8 @@ struct KeyCacheEntry
 	uint8 aes128key[16];
 };
 
-std::vector<KeyCacheEntry> g_keyCache;
+// append-only, so pointers returned by KeyCache_GetAES128 stay valid while keys are added (KeyCache_Reload)
+std::deque<KeyCacheEntry> g_keyCache;
 
 bool strishex(std::string_view str)
 {
@@ -34,17 +36,70 @@ bool strishex(std::string_view str)
  */
 uint8* KeyCache_GetAES128(sint32 index)
 {
+	std::scoped_lock lock(mtxKeyCache);
 	if( index < 0 || index >= (sint32)g_keyCache.size())
 		return nullptr;
 	KeyCacheEntry* keyCacheEntry = &g_keyCache[index];
 	return keyCacheEntry->aes128key;
 }
 
+// mtxKeyCache must be held
 void KeyCache_AddKey128(uint8* key)
 {
 	KeyCacheEntry newEntry = {0};
 	memcpy(newEntry.aes128key, key, 16);
 	g_keyCache.emplace_back(newEntry);
+}
+
+// Parses keys.txt: one key per line, anything after '#' or ';' is a comment
+static void KeyCache_ParseKeysFile(FileStream* fs_keys, bool reportErrors, const std::function<void(uint8*)>& onKey)
+{
+	sint32 lineNumber = 0;
+	std::string line;
+	while( fs_keys->readLine(line) )
+	{
+		lineNumber++;
+		// truncate anything after '#' or ';'
+		for(size_t i=0; i<line.size(); i++)
+		{
+			if(line[i] == '#' || line[i] == ';' )
+			{
+				line.resize(i);
+				break;
+			}
+		}
+		// remove whitespaces and other common formatting characters
+		auto itr = line.begin();
+		while (itr != line.end())
+		{
+			char c = *itr;
+			if (c == ' ' || c == '\t' || c == '-' || c == '_')
+				itr = line.erase(itr);
+			else
+				itr++;
+		}
+		if (line.empty())
+			continue;
+		if( strishex(line) == false )
+		{
+			if (!reportErrors)
+				continue;
+			auto errorMsg = _tr("Error in keys.txt at line {}", lineNumber);
+			WindowSystem::ShowErrorDialog(errorMsg, WindowSystem::ErrorCategory::KEYS_TXT_CREATION);
+			continue;
+		}
+		if(line.size() == 32 )
+		{
+			// 128-bit key
+			uint8 keyData128[16];
+			StringHelpers::ParseHexString(line, keyData128, 16);
+			onKey(keyData128);
+		}
+		else
+		{
+			// invalid key length
+		}
+	}
 }
 
 bool sKeyCachePrepared = false;
@@ -80,50 +135,32 @@ void KeyCache_Prepare()
 		mtxKeyCache.unlock();
 		return;
 	}
-	sint32 lineNumber = 0;
-	std::string line;
-	while( fs_keys->readLine(line) )
-	{
-		lineNumber++;
-		// truncate anything after '#' or ';'
-		for(size_t i=0; i<line.size(); i++)
-		{
-			if(line[i] == '#' || line[i] == ';' )
-			{
-				line.resize(i);
-				break;
-			}
-		}
-		// remove whitespaces and other common formatting characters
-		auto itr = line.begin();
-		while (itr != line.end())
-		{
-			char c = *itr;
-			if (c == ' ' || c == '\t' || c == '-' || c == '_')
-				itr = line.erase(itr);
-			else
-				itr++;
-		}
-		if (line.empty())
-			continue;
-		if( strishex(line) == false )
-		{
-			auto errorMsg = _tr("Error in keys.txt at line {}", lineNumber);
-			WindowSystem::ShowErrorDialog(errorMsg, WindowSystem::ErrorCategory::KEYS_TXT_CREATION);
-			continue;
-		}
-		if(line.size() == 32 )
-		{
-			// 128-bit key
-			uint8 keyData128[16];
-			StringHelpers::ParseHexString(line, keyData128, 16);
-			KeyCache_AddKey128(keyData128);
-		}
-		else
-		{
-			// invalid key length
-		}
-	}
+	KeyCache_ParseKeysFile(fs_keys, true, KeyCache_AddKey128);
 	delete fs_keys;
 	mtxKeyCache.unlock();
 }
+
+#if BOOST_PLAT_ANDROID
+// The Android app can import keys while it runs. Adds the keys of keys.txt that aren't loaded yet and returns how
+// many; removed keys stay loaded until the next start. Nothing to do before the first KeyCache_Prepare.
+sint32 KeyCache_Reload()
+{
+	std::scoped_lock lock(mtxKeyCache);
+	if (!sKeyCachePrepared)
+		return 0;
+	FileStream* fs_keys = FileStream::openFile2(ActiveSettings::GetUserDataPath("keys.txt"));
+	if (!fs_keys)
+		return 0;
+	sint32 addedCount = 0;
+	KeyCache_ParseKeysFile(fs_keys, false, [&addedCount](uint8* key) {
+		bool isKnown = std::any_of(g_keyCache.begin(), g_keyCache.end(), [key](const KeyCacheEntry& entry) { return memcmp(entry.aes128key, key, 16) == 0; });
+		if (!isKnown)
+		{
+			KeyCache_AddKey128(key);
+			addedCount++;
+		}
+	});
+	delete fs_keys;
+	return addedCount;
+}
+#endif

@@ -1,4 +1,5 @@
 #include "AndroidGameTitleLoadedCallback.h"
+#include "Cafe/Filesystem/FST/KeyCache.h"
 #include "Cafe/TitleList/SaveList.h"
 #include "Cafe/GameProfile/GameProfile.h"
 #include "JNIUtils.h"
@@ -357,6 +358,17 @@ extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeGameTitles_refreshCafeTitleList([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
 {
 	CafeTitleList::Refresh();
+}
+
+// After keys.txt changed: loads the new keys and rescans the titles, disc images that couldn't be decrypted may
+// show up now. Returns the number of keys added.
+extern "C" [[maybe_unused]] JNIEXPORT jint JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeGameTitles_reloadKeys([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	const sint32 addedCount = KeyCache_Reload();
+	if (addedCount > 0)
+		CafeTitleList::Refresh();
+	return addedCount;
 }
 
 std::unique_ptr<TitleListCallbacks> g_titleListCallbacks;

@@ -201,6 +201,10 @@ object NativeGameTitles {
     @JvmStatic
     external fun refreshCafeTitleList()
 
+    /** Loads keys added to keys.txt and rescans the titles if there were any. Returns the number of new keys. */
+    @JvmStatic
+    external fun reloadKeys(): Int
+
     @JvmStatic
     external fun setTitleListCallbacks(titleListCallbacks: TitleListCallbacks?)
 
