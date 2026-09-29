@@ -135,7 +135,7 @@ Format: date · what was done · what's next · open questions. Keep each entry 
 ## 2026-09-28/29, session 3 (bugs, owner requests, backlog features)
 **Owner:** "so far it's doing pretty great" from their own testing, and asked to keep going. Mid-session they asked for a keys file import. Still no adb device (MTP only).
 
-**Commits** (every one built as a dev APK; 21 JVM tests pass: 3 ArchUnit + driver 3 + SAF 7 + keys 4):
+**Commits** (every one built as a dev APK; 17 JVM tests pass: 3 ArchUnit + driver 3 + SAF 7 + keys 4):
 - **Bugs:**
   - 9e51a7b8 SAF paths (K30).
   - 76d76442 K16.
@@ -163,6 +163,6 @@ Format: date · what was done · what's next · open questions. Keep each entry 
 **Lessons:**
 - `<<'EOF'` heredocs break in this harness when the text contains `$` or unbalanced quotes. Write edit scripts with the Write tool into the scratchpad and run them with python.
 - The auto-mode safety check failed transiently several times (WebFetch/Bash/PowerShell). Edit/Write kept working; retry later.
-- A Kotlin `object`'s anonymous C++ struct can't hold a `static constexpr` member (build error); use a namespace-scope constant.
+- An anonymous C++ struct can't hold a `static constexpr` member (build error); use a namespace-scope constant.
 
 **Next:** see "Current focus" in TODO.md. D1/D2/D7 still need the owner's decision.
