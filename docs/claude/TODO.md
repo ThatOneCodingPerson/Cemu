@@ -225,7 +225,13 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
    - [ ] Mirror the TV on the second screen; input overlay / performance overlay on the second screen
 5. [ ] Per-game controller profiles and overlay layouts
 6. [ ] Save backup/restore per title; single-file WUA/WUP install picker
-7. [ ] Overlay frametime graph, battery and temperature; sustained-performance toggle
+7. [~] Overlay frametime graph, battery and temperature; sustained-performance toggle
+   - [?] Battery (level, charging "+", battery temperature) and thermal status lines in the overlay; Settings > Overlay toggles (2026-09-28, f03ccff9)
+     - **Device test:** overlay position set, both toggles on:
+       - The lines show and update while charging/unplugging.
+       - The thermal status changes after a long heavy session.
+       - The overlay with only these two lines enabled still shows.
+   - [ ] Frametime graph; sustained-performance toggle (`Window.setSustainedPerformanceMode`; check that the Thor supports it)
 8. [?] Amiibo picker (`nn_nfp`) (2026-09-28, 61d1481e): game menu "Scan amiibo" + hotkey, files copied to `<user data>/amiibo` (games write back to them)
    - **Device test:** in a game that asks for an amiibo (e.g. BotW rune, Smash, Splatoon, MK8):
      - Menu > Scan amiibo > Import file > pick a .bin: "Scanned <name>" and the game reacts.
