@@ -40,6 +40,13 @@ Java_info_cemu_cemu_nativeinterface_NativeActiveSettings_setInternalDir(JNIEnv* 
 }
 
 extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeActiveSettings_refreshOnlineFilesStatus([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	// Init only (re)checks the online files, e.g. after the app imported otp.bin/seeprom.bin
+	ActiveSettings::Init();
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeActiveSettings_hasRequiredOnlineFiles(JNIEnv* env, [[maybe_unused]] jclass clazz)
 {
 	return ActiveSettings::HasRequiredOnlineFiles();

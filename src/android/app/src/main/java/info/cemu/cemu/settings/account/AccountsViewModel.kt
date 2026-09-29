@@ -1,5 +1,7 @@
 package info.cemu.cemu.settings.account
 
+import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import info.cemu.cemu.nativeinterface.NativeAccount
@@ -7,11 +9,14 @@ import info.cemu.cemu.nativeinterface.NativeAccount.MAX_ACCOUNT_COUNT
 import info.cemu.cemu.nativeinterface.NativeAccount.MIN_ACCOUNT_COUNT
 import info.cemu.cemu.nativeinterface.NativeActiveSettings
 import info.cemu.cemu.nativeinterface.NativeSettings
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class CreateAccount(
     val persistentId: Int?,
@@ -50,11 +55,24 @@ class AccountsViewModel : ViewModel() {
     private val activeAccountNetworkService =
         MutableStateFlow(NativeSettings.getAccountNetworkService(activeAccountPersistentId.value))
 
-    val onlineFilesStatus = OnlineFilesStatus(
+    private fun readOnlineFilesStatus() = OnlineFilesStatus(
         hasRequiredOnlineFiles = NativeActiveSettings.hasRequiredOnlineFiles(),
         isOTPPresent = NativeAccount.isOTPPresent(),
         isSEEPREOMPresent = NativeAccount.isSEEPROMPresent(),
     )
+
+    private val _onlineFilesStatus = MutableStateFlow(readOnlineFilesStatus())
+    val onlineFilesStatus = _onlineFilesStatus.asStateFlow()
+
+    /** Imports picked otp.bin/seeprom.bin files; [onFinished] gets one result per file. */
+    fun importOnlineFiles(context: Context, uris: List<Uri>, onFinished: (List<OnlineFileImportResult>) -> Unit) {
+        viewModelScope.launch {
+            val results = uris.map { importOnlineFile(context, it) }
+            withContext(Dispatchers.IO) { NativeActiveSettings.refreshOnlineFilesStatus() }
+            _onlineFilesStatus.value = readOnlineFilesStatus()
+            onFinished(results)
+        }
+    }
 
     val activeAccountData =
         combine(

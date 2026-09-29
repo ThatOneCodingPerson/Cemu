@@ -2,6 +2,8 @@
 
 package info.cemu.cemu.settings.account
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,6 +21,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -29,10 +33,12 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.LinkAnnotation
@@ -51,6 +57,7 @@ import info.cemu.cemu.common.ui.components.Header
 import info.cemu.cemu.common.ui.components.ScreenContent
 import info.cemu.cemu.common.ui.components.SelectField
 import info.cemu.cemu.common.ui.components.SingleSelection
+import info.cemu.cemu.common.ui.extensions.showMessage
 import info.cemu.cemu.common.ui.localization.tr
 import info.cemu.cemu.nativeinterface.NativeAccount
 import info.cemu.cemu.nativeinterface.NativeAccount.AccountGender
@@ -71,8 +78,27 @@ fun AccountSettingsScreen(
     val accounts by accountsViewModel.accounts.collectAsState()
     val activeAccountData by accountsViewModel.activeAccountData.collectAsState()
     val activeAccount = activeAccountData.account
-    val onlineFullyValid =
-        activeAccount.isValid && accountsViewModel.onlineFilesStatus.hasRequiredOnlineFiles
+    val onlineFilesStatus by accountsViewModel.onlineFilesStatus.collectAsState()
+    val onlineFullyValid = activeAccount.isValid && onlineFilesStatus.hasRequiredOnlineFiles
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val onlineFilesLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+            if (uris.isEmpty()) return@rememberLauncherForActivityResult
+            accountsViewModel.importOnlineFiles(context, uris) { results ->
+                val message = results.joinToString("\n") { result ->
+                    when (result) {
+                        is OnlineFileImportResult.Imported -> tr("{0} imported", result.kind.fileName)
+                        is OnlineFileImportResult.Unrecognized ->
+                            tr("{0} is neither an otp.bin (1024 bytes) nor a seeprom.bin (512 bytes)", result.name)
+
+                        OnlineFileImportResult.Error -> tr("Failed to import a file")
+                    }
+                }
+                snackbarHostState.showMessage(coroutineScope, message)
+            }
+        }
     val hasCustomNetworkConfiguration = remember { NativeSettings.hasCustomNetworkConfiguration() }
     var showCreateAccountDialog by remember { mutableStateOf(false) }
     var showDeleteAccountDialog by remember { mutableStateOf(false) }
@@ -85,6 +111,7 @@ fun AccountSettingsScreen(
 
     ScreenContent(
         appBarText = tr("Account settings"),
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         navigateBack = navigateBack,
     ) {
         SingleSelection(
@@ -129,9 +156,10 @@ fun AccountSettingsScreen(
 
         OnlinePlayRequirements(
             account = activeAccount,
-            onlineFilesStatus = accountsViewModel.onlineFilesStatus,
+            onlineFilesStatus = onlineFilesStatus,
             onlineFullyValid = onlineFullyValid,
-            onGetOnlineValidationErrors = accountsViewModel::getActiveAccountValidationErrors
+            onGetOnlineValidationErrors = accountsViewModel::getActiveAccountValidationErrors,
+            onImportOnlineFiles = { onlineFilesLauncher.launch(arrayOf("*/*")) },
         )
 
         AccountInformation(
@@ -190,6 +218,7 @@ private fun OnlinePlayRequirements(
     onlineFilesStatus: OnlineFilesStatus,
     onlineFullyValid: Boolean,
     onGetOnlineValidationErrors: () -> Array<NativeAccount.OnlineValidationError>,
+    onImportOnlineFiles: () -> Unit,
 ) {
     var onlineValidationErrors by remember {
         mutableStateOf<Array<NativeAccount.OnlineValidationError>?>(
@@ -214,6 +243,14 @@ private fun OnlinePlayRequirements(
         ) {
             Text(tr("Show online status"))
         }
+    }
+
+    // the Cemu folder (Android/data) often can't be reached with a file manager
+    OutlinedButton(
+        onClick = onImportOnlineFiles,
+        modifier = Modifier.padding(top = 2.dp, bottom = 8.dp, start = 8.dp, end = 8.dp)
+    ) {
+        Text(tr("Import otp.bin / seeprom.bin"))
     }
 
     OnlineTutorial()

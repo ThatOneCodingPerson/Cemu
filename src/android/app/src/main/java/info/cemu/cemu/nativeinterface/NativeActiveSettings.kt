@@ -23,4 +23,8 @@ object NativeActiveSettings {
 
     @JvmStatic
     external fun hasRequiredOnlineFiles(): Boolean
+
+    /** Checks the online files (otp.bin, seeprom.bin, certificates) again, see [hasRequiredOnlineFiles]. */
+    @JvmStatic
+    external fun refreshOnlineFilesStatus()
 }
