@@ -215,7 +215,14 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
        - Repeated presses don't crash.
      - Swap screens / toggle PAD / toggle overlay hotkeys behave like the menu checkboxes (Thor: with the PAD on the bottom screen too).
    - **Not done:** fast-forward/speed toggle (the core has no speed-up path) and default hotkey combos (part of auto-map, #2).
-4. [ ] Dual-screen polish: display picker, mirror the TV, overlay on the second screen, split ratio
+4. [~] Dual-screen polish: display picker, mirror the TV, overlay on the second screen, split ratio
+   - [?] Split ratio for single-screen devices: Settings > General > "TV screen size next to the GamePad" 50–80 %, plus the fix for GamePad position Left/Above having had no effect (K31) (2026-09-28, adf22428)
+     - **Device test:** phone, Show PAD in the game menu:
+       - The slider changes the TV/GamePad split.
+       - All four GamePad positions put the pad on that side.
+       - Touch on both surfaces still hits the right spots.
+   - [ ] Display picker + per-display memory (only matters with 2+ candidate displays, e.g. Thor + HDMI)
+   - [ ] Mirror the TV on the second screen; input overlay / performance overlay on the second screen
 5. [ ] Per-game controller profiles and overlay layouts
 6. [ ] Save backup/restore per title; single-file WUA/WUP install picker
 7. [ ] Overlay frametime graph, battery and temperature; sustained-performance toggle
