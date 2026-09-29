@@ -17,10 +17,14 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
   1. [?] Remaining open bugs: K14, K15, K18, K25, K26 (c27e208b), A15 (aaab5241 + pad/second-screen gate), B5 (4392ec37). K24 blocked: core swkbd has no cancel result.
   2. [?] Backlog #1, the GPU driver fetcher (e8efeb45).
   3. [?] Backlog #3, hotkeys (1c18255f).
-  4. Backlog #2, auto-map.
+  4. [?] Backlog #2, auto-map (8e9a5094).
 - **Blocked on the owner:**
-  - Device tests: the Thor has no USB debugging. It is still MTP only at the start of session 2; `adb devices` is empty.
+  - Device tests: the Thor has no USB debugging. It was still MTP only at the end of session 2; `adb devices` is empty.
   - The D1/D2 save-sync design decision (see Phase 3).
+- **Next session, in order:**
+  1. If a device is attached: install, walk the `[?]` device-test lists (newest first), pull logs, fix regressions.
+  2. SAF path encoding (Phase 3), then K13/K16/K17/K27 and P1/P4/P9.
+  3. Backlog #4, dual-screen polish, then #5 per-game controller profiles (also covers the auto-map follow-up).
 
 ---
 
@@ -166,7 +170,20 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
      - Download KIMCHI "Qualcomm Driver v840" on Android 13: "needs a newer Android version".
      - Airplane mode: error card + Retry. Leaving the screen mid-download leaves no `driver-download.zip` in the cache dir.
      - A non-Qualcomm phone has no Custom drivers entry at all (unchanged).
-2. [ ] Controller auto-map with a "press A" layout prompt; auto-apply a default profile per vendor:product
+2. [~] Controller auto-map with a "press A" layout prompt; auto-apply a default profile per vendor:product
+   - [?] "Press A" prompt in Map all inputs (A = button names, B = Wii U positions) + first-run auto-configure + auto-map while controller 1 is unmapped, with a setting (2026-09-28, 8e9a5094)
+   - [ ] Per vendor:product saved profiles (auto-apply when a *different* known controller connects). Joy-Con quirks (Azahar special-cases their partial A/B swap).
+   - **Device test:**
+     - Fresh install of Cemu Dev on the Thor:
+       - Game list shows the toast `"<Thor controller>" was mapped to controller 1…`.
+       - Settings > Input > Controller 1 is GamePad with mappings. A game responds to the built-in controls, and the input overlay works too.
+     - Phone without a controller, fresh install: controller 1 is GamePad, overlay works, no toast.
+     - Connect a Bluetooth pad while controller 1 has no mappings: toast plus mappings. With mappings already there: nothing happens.
+     - Controller 1 > Map all inputs > pick the controller > the prompt appears:
+       - The Xbox pad's "A" (bottom) keeps names.
+       - Its right button ("B") swaps (Wii U A = right button).
+       - "Use button names" and Cancel buttons work.
+     - Toggle "Map controllers automatically" off: no auto-mapping.
 3. [?] More hotkeys: swap screens, toggle pad, pause, screenshot, toggle input overlay (2026-09-28, 1c18255f)
    - **Device test:**
      - Map each new action in Settings > Input > Hotkeys (e.g. Select+L, Select+R …) and use it in-game.

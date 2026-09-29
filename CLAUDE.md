@@ -111,6 +111,11 @@
   - Handle display removal (the Presentation auto-dismisses) and `InvalidDisplayException` from `show()`.
   - Test single-screen devices too.
 - **Settings JSON:** must decode with `ignoreUnknownKeys`. Schema drift otherwise silently resets everything, including the custom storage root.
+  - Enums stored by name (e.g. `HotkeyAction` map keys) are append-only. An unknown enum *map key* fails decoding even with `coerceInputValues`.
+- **Processes:** the main process owns the native settings and controller profiles (`saveSettings`, `saveInputs`). The emulation process (`:EmulationProcess`) loads them at game start. Don't write profiles from the emulation process; it would race the main process's in-memory copy.
+- **Navigation:** back buttons call `navController.navigateBackSafely()` (`common/ui/extensions`), never a bare `popBackStack()`. A double tap otherwise pops the start destination and leaves a blank screen.
+- **Key capture UI:** use a `Popup`, not a `Dialog`, when listening to `GamepadInputSource`. A Dialog window takes the key events away from the activity.
+- **Driver fetcher:** the repo list lives in `settings/customdrivers/DriverReleases.kt`. Re-check that the repos still exist when touching it (one moved in 2026-09).
 
 ## Conventions
 - **C++** (`CODING_STYLE.md`, `.clang-format`):

@@ -90,3 +90,44 @@ Format: date · what was done · what's next · open questions. Keep each entry 
 - D1/D2 once decided.
 - SAF path encoding (Phase 3).
 - Then the feature backlog, starting with the GPU driver fetcher (FEATURE_RESEARCH.md §1).
+
+## 2026-09-28, session 2 (bugs, driver fetcher, hotkeys, auto-map)
+**Device:** still none. `adb devices` was empty all session (the Thor enumerates as MTP only).
+
+**Commits (all built as dev APKs; `testDebugUnitTest` passes; 6 tests: 3 ArchUnit + 3 driver tests):**
+- **`aaab5241`, `c27e208b`, `4392ec37`, `08ddc021`: open bugs.**
+  - A15: specific error codes for an invalid RPX and an unmountable title.
+  - K14/K18: title list races and hidden DLC in compression.
+  - K15: deleting the active account.
+  - K25: `navigateBackSafely`.
+  - K26: backup rules.
+  - B5: dead CMake argument.
+  - K29: no pad/second-screen offer after a failed launch.
+  - K24 is blocked: the core swkbd has no cancel.
+- **`e8efeb45`: GPU driver fetcher.**
+  - Five GitHub repos. `whitebelyash/freedreno_turnip-CI` moved to `whitebelyash/AdrenoToolsDrivers`.
+  - GPU probe via a separate system-loader VkInstance, plus an Adreno-based suggestion.
+  - Streamed download, the shared `installDriverZip`, and a `minApi` check. KIMCHI's Qualcomm 840 package needs API 35.
+- **`1c18255f`: hotkeys and menu entries.**
+  - Pause (user pause and surface-loss pause combined).
+  - Screenshot: the core capture, handed to Kotlin, saved as PNG via MediaStore to Pictures/Cemu.
+  - Swap screens, toggle PAD, toggle overlay.
+- **`8e9a5094`: controller auto-configuration.**
+  - K28: a fresh install had no emulated controller at all.
+  - Auto-map while controller 1 is unmapped.
+  - "Press A" prompt in Map all inputs.
+  - `InputMapper` moved to `common/input`.
+
+**Research this session:**
+- **GitHub releases API:** re-checked with curl. One asset from each repo was downloaded and its `meta.json` inspected.
+- **GitHub docs:** rate limit and User-Agent rules.
+- **Android docs:** MediaStore needs no permission for owned files on Android 10+ (the `IS_PENDING` protocol).
+- **Azahar `AutoMapDialogFragment.kt`:** read for the idea only (GPL).
+- **Ktor 3.4.2:** `ByteReadChannel.readAvailable` signature verified with javap on the jar.
+
+**Lessons:**
+- Again: backslash escapes inside `<<'EOF'` Python heredocs end up literally in files (`\"`). Use the Edit tool for such strings.
+- Swallowing `CancellationException` in `catch (Exception)` makes cancelled coroutines overwrite newer state. Rethrow it (done in the driver code).
+- Compose `Dialog` windows don't pass gamepad keys to the activity; use `Popup` for key capture.
+
+**Next:** see "Next session" in TODO.md. Every session-2 item is `[?]` and needs the owner's device test first.

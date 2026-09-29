@@ -100,6 +100,13 @@ Status: **first pass done** (2026-09-28). Every section is filled; the `?` cells
 - Save a profile per vendor:product and auto-apply it on connect (`NativeInputDeviceListener`).
 - Test with Xbox, DualSense, a Switch Pro controller, and the Thor's built-in controls.
 
+**Implemented** 8e9a5094 (2026-09-28; Azahar's `AutoMapDialogFragment.kt` re-read on master, GPL, so ideas only):
+- **Prompt:** "press the button that should be A". `BUTTON_A` keeps names; `BUTTON_B` swaps A/B + X/Y. Unlike Azahar we let the user choose labels vs positions on Xbox pads instead of forcing positions.
+- **Popup:** a `Popup`, because Dialog windows swallow the key events.
+- **Fresh install:** found that no emulated controller exists, so controller 1 becomes a GamePad (BUGS K28).
+- **Auto-map:** while controller 1 is unmapped, the first gamepad (SOURCE_GAMEPAD, sticks preferred) is mapped by button names, in the main process only.
+- **Not done:** saved per-vendor:product profiles, the Joy-Con quirks, auto-map mid-game from the emulation process.
+
 ## 3. Save states
 **Prior art:**
 - **cemu-project/Cemu PR #953 (Spegs21)** (read 2026-09-28):
