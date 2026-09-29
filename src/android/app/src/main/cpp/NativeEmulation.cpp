@@ -190,6 +190,9 @@ namespace NativeEmulation
 		return ERROR_UNKNOWN;
 	}
 
+	// title id of the successfully prepared title, 0 before that or for a standalone RPX
+	std::atomic<uint64> s_preparedTitleId = 0;
+
 	class TestSurface
 	{
 	  public:
@@ -486,6 +489,8 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_prepareTitle([[maybe_unused]
 				return;
 			}
 			result = NativeEmulation::ToPrepareTitleResult(CafeSystem::PrepareForegroundTitle(baseTitleId));
+			if (result == SUCCESSFUL)
+				NativeEmulation::s_preparedTitleId = CafeSystem::GetForegroundTitleId();
 		}
 		else // if (launchTitle.GetFormat() == TitleInfo::TitleDataFormat::INVALID_STRUCTURE )
 		{
@@ -503,6 +508,13 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_prepareTitle([[maybe_unused]
 		}
 	});
 	return result;
+}
+
+// The prepared title's id, for per-game app settings (e.g. the input overlay layout). 0 if unknown.
+extern "C" [[maybe_unused]] JNIEXPORT jlong JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeEmulation_getForegroundTitleId([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	return (jlong)NativeEmulation::s_preparedTitleId.load();
 }
 
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL

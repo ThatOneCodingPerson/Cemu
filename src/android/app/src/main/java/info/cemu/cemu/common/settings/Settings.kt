@@ -65,6 +65,11 @@ data class InputOverlaySettings(
     val alpha: Int = 64,
     val inputVisibilityMap: Map<OverlayInputConfig, Boolean> = emptyMap(),
     val inputOverlayRectMap: Map<OverlayInputConfig, InputOverlayRect> = emptyMap(),
+    /**
+     * Layouts of the games that have their own ("Separate layout for this game"), by title id as 16 hex digits
+     * (see InputOverlayLayouts.kt). An empty layout means the default positions.
+     */
+    val perGameRectMaps: Map<String, Map<OverlayInputConfig, InputOverlayRect>> = emptyMap(),
 )
 
 @Serializable

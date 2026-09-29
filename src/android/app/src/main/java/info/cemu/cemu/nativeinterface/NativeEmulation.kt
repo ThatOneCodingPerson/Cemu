@@ -59,6 +59,10 @@ object NativeEmulation {
     @JvmStatic
     external fun launchTitle()
 
+    /** Title id of the title prepared by [prepareTitle] in this process; 0 if unknown (e.g. a standalone RPX). */
+    @JvmStatic
+    external fun getForegroundTitleId(): Long
+
     @JvmStatic
     external fun pauseTitle()
 

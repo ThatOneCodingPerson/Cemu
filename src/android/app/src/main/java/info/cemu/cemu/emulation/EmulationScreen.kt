@@ -118,6 +118,7 @@ fun EmulationScreen(
     val isPausedByUser by viewModel.isPausedByUser.collectAsState()
     val isInputOverlayVisible by viewModel.isInputOverlayVisible.collectAsState()
     val inputOverlaySettings by viewModel.inputOverlaySettings.collectAsState()
+    val hasPerGameOverlayLayout by viewModel.hasPerGameOverlayLayout.collectAsState()
 
     // second display (dual-screen handheld like the AYN Thor, or an external monitor) for the GamePad, null if none
     val context = LocalContext.current
@@ -266,6 +267,14 @@ fun EmulationScreen(
                         onResetInputOverlay = {
                             viewModel.resetInputOverlayLayout()
                             closeDrawer()
+                        },
+                        hasPerGameOverlayLayout = hasPerGameOverlayLayout,
+                        onPerGameOverlayLayoutChanged = { separate ->
+                            viewModel.setPerGameOverlayLayout(separate)
+                            snackbarHostState.showMessage(
+                                scope,
+                                if (separate) tr("This game now has its own input layout") else tr("This game uses the shared input layout again"),
+                            )
                         },
                         onQuit = {
                             showQuitConfirmationDialog = true
@@ -434,6 +443,8 @@ private fun EmulationSideMenuContent(
     onShowEmulatedUSBDevices: () -> Unit,
     onEditInputOverlay: () -> Unit,
     onResetInputOverlay: () -> Unit,
+    hasPerGameOverlayLayout: Boolean?,
+    onPerGameOverlayLayoutChanged: (Boolean) -> Unit,
     onQuit: () -> Unit,
 ) {
     CheckboxItem(
@@ -518,6 +529,16 @@ private fun EmulationSideMenuContent(
         enabled = sideMenuState.isInputOverlayVisible,
         onClick = onResetInputOverlay,
     )
+
+    // null while the title isn't known yet (or a standalone RPX)
+    if (hasPerGameOverlayLayout != null) {
+        CheckboxItem(
+            label = tr("Separate input layout for this game"),
+            checked = hasPerGameOverlayLayout,
+            onCheckedChange = onPerGameOverlayLayoutChanged,
+            enabled = sideMenuState.isInputOverlayVisible,
+        )
+    }
 
     TextButtonItem(
         label = tr("Exit"),

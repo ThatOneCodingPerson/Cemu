@@ -21,6 +21,10 @@ import info.cemu.cemu.common.settings.InputOverlayRect
 import info.cemu.cemu.common.settings.InputOverlaySettings
 import info.cemu.cemu.common.settings.OverlayInputConfig
 import info.cemu.cemu.common.settings.TV_SCREEN_PERCENT_RANGE
+import info.cemu.cemu.common.settings.forTitle
+import info.cemu.cemu.common.settings.hasPerGameLayout
+import info.cemu.cemu.common.settings.withLayout
+import info.cemu.cemu.common.settings.withPerGameLayout
 import info.cemu.cemu.nativeinterface.NativeEmulation
 import info.cemu.cemu.nativeinterface.NativeEmulation.PrepareTitleResult
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +32,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -119,30 +124,46 @@ class EmulationViewModel(
         }
     }
 
-    val inputOverlaySettings = dataStore.data.map { it.inputOverlaySettings }.stateIn(
+    // the running title, known after prepareTitle; for its own input overlay layout
+    private val titleId = MutableStateFlow<Long?>(null)
+
+    /** The overlay settings with the layout of this game (its own or the global one). */
+    val inputOverlaySettings = combine(dataStore.data, titleId) { settings, titleId ->
+        settings.inputOverlaySettings.forTitle(titleId)
+    }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
         InputOverlaySettings(),
     )
 
-    fun saveInputOverlayRectangles(inputOverlayRectMap: Map<OverlayInputConfig, InputOverlayRect>) {
+    /** null while the title isn't known (the option can't be offered), otherwise whether it has its own layout. */
+    val hasPerGameOverlayLayout = combine(dataStore.data, titleId) { settings, titleId ->
+        if (titleId == null || titleId == 0L) null else settings.inputOverlaySettings.hasPerGameLayout(titleId)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    fun setPerGameOverlayLayout(enabled: Boolean) {
+        val currentTitleId = titleId.value ?: return
         viewModelScope.launch {
             dataStore.updateData {
-                val overlaySettings =
-                    it.inputOverlaySettings.copy(inputOverlayRectMap = inputOverlayRectMap)
+                it.copy(inputOverlaySettings = it.inputOverlaySettings.withPerGameLayout(currentTitleId, enabled))
+            }
+        }
+    }
 
-                it.copy(inputOverlaySettings = overlaySettings)
+    fun saveInputOverlayRectangles(inputOverlayRectMap: Map<OverlayInputConfig, InputOverlayRect>) {
+        val currentTitleId = titleId.value
+        viewModelScope.launch {
+            dataStore.updateData {
+                it.copy(inputOverlaySettings = it.inputOverlaySettings.withLayout(currentTitleId, inputOverlayRectMap))
             }
         }
     }
 
     fun resetInputOverlayLayout() {
+        val currentTitleId = titleId.value
         viewModelScope.launch {
             dataStore.updateData {
-                val overlaySettings =
-                    it.inputOverlaySettings.copy(inputOverlayRectMap = emptyMap())
-
-                it.copy(inputOverlaySettings = overlaySettings)
+                it.copy(inputOverlaySettings = it.inputOverlaySettings.withLayout(currentTitleId, emptyMap()))
             }
         }
     }
@@ -289,7 +310,11 @@ class EmulationViewModel(
             .fold(
                 onSuccess = { result ->
                     when (result) {
-                        PrepareTitleResult.SUCCESSFUL -> Success(Unit)
+                        PrepareTitleResult.SUCCESSFUL -> {
+                            titleId.value = NativeEmulation.getForegroundTitleId()
+                            Success(Unit)
+                        }
+
                         PrepareTitleResult.ERROR_GAME_BASE_FILES_NOT_FOUND -> Error(NativeError.GameFilesNotFoundError)
                         PrepareTitleResult.ERROR_NO_DISC_KEY -> Error(NativeError.NoDiscKeysError)
                         PrepareTitleResult.ERROR_NO_TITLE_TIK -> Error(NativeError.NoTitleTikError)
@@ -320,6 +345,7 @@ class EmulationViewModel(
             isTitleLaunched = true
             isPausedBySurfaceLoss = true
             isNativePaused = true
+            titleId.value = NativeEmulation.getForegroundTitleId()
             if (isMainSurfaceAvailable) {
                 resumeAfterSurfaceLoss()
             }
