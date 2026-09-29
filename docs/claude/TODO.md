@@ -251,7 +251,9 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
        - The lines show and update while charging/unplugging.
        - The thermal status changes after a long heavy session.
        - The overlay with only these two lines enabled still shows.
-   - [ ] Frametime graph; sustained-performance toggle (`Window.setSustainedPerformanceMode`; check that the Thor supports it)
+   - [?] Sustained performance mode toggle in Settings > General, only shown if the device supports it (2026-09-29, f1faa289)
+     - **Device test:** check whether the Thor shows the toggle. If it does, enable it, play 20+ min and compare the FPS stability with it off.
+   - [ ] Frametime graph
 8. [?] Amiibo picker (`nn_nfp`) (2026-09-28, 61d1481e): game menu "Scan amiibo" + hotkey, files copied to `<user data>/amiibo` (games write back to them)
    - **Device test:** in a game that asks for an amiibo (e.g. BotW rune, Smash, Splatoon, MK8):
      - Menu > Scan amiibo > Import file > pick a .bin: "Scanned <name>" and the game reacts.
