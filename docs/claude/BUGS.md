@@ -114,12 +114,12 @@ When you fix an entry, update its status here and tick the matching item in TODO
 | ID | Where | Item | Status |
 |---|---|---|---|
 | P1 | `SwapchainInfoVk.cpp:437-441` | `preTransform` is forced to IDENTITY, so the compositor rotates every frame. Honor `currentTransform` and rotate in the final blit (developer.android.com/games/optimize/vulkan-prerotation) | open |
-| P2 | whole codebase | No ADPF, affinity or priority. Thor runs API 33, so `APerformanceHint` is available; load it at runtime (minSdk 30). TIDs are in `g_schedulerThreadIds` | open |
-| P3 | `Espresso/PPCTimer.cpp:34-83` | 3 s frequency estimate that launch blocks on; use `cntfrq_el0`. `_rdtscFrequency` is a data race. The `_addcarry_u64` shim (`precompiled.h:431`) drops the carry | open |
+| P2 | whole codebase | No ADPF, affinity or priority. Thor runs API 33, so `APerformanceHint` is available; load it at runtime (minSdk 30). TIDs are in `g_schedulerThreadIds` | fixed 76ac98f1 |
+| P3 | `Espresso/PPCTimer.cpp:34-83` | 3 s frequency estimate that launch blocks on; use `cntfrq_el0`. `_rdtscFrequency` is a data race. The `_addcarry_u64` shim (`precompiled.h:431`) drops the carry | fixed 76ac98f1 |
 | P4 | `BackendAArch64.cpp:1595-1608` | Functions with unsupported IML fall back to the interpreter. Profile per game (upstream work) | open |
 | P5 | `snd_core/ax_out.cpp`, `CafeSystem::PauseTitle` | Audio keeps running while paused; no audio focus handling | fixed f333fe7a |
-| P6 | `VulkanRenderer.cpp:348-476,538-544` | BotW/RADV `fork()`+`execl` compiled in via `BOOST_OS_LINUX`; unreachable on Adreno/Mali. Guard with `!BOOST_PLAT_ANDROID` | open |
-| P7 | `util/SystemInfo/SystemInfoLinux.cpp:27` | `/proc/stat` is blocked by SELinux, so the overlay's CPU% reads 0 | open |
-| P8 | `VulkanRenderer.cpp:3037-3039` | One vsync setting drives both swapchains. A FIFO pad chain at 60 Hz can throttle the 120 Hz main chain on Thor | open |
+| P6 | `VulkanRenderer.cpp:348-476,538-544` | BotW/RADV `fork()`+`execl` compiled in via `BOOST_OS_LINUX`; unreachable on Adreno/Mali. Guard with `!BOOST_PLAT_ANDROID` | fixed 76ac98f1 |
+| P7 | `util/SystemInfo/SystemInfoLinux.cpp:27` | `/proc/stat` is blocked by SELinux, so the overlay's CPU% reads 0 | wontfix: only the per-core breakdown reads /proc/stat; overall CPU% uses times() and works; per-core isn't exposed in the Android UI |
+| P8 | `VulkanRenderer.cpp:3037-3039` | One vsync setting drives both swapchains. A FIFO pad chain at 60 Hz can throttle the 120 Hz main chain on Thor | fixed 76ac98f1 |
 | P9 | `VulkanPipelineCompiler.cpp:1147-1160` | min(8, cores−1) compile threads at normal priority compete with the PPC and GPU threads | open |
 | P10 | `NativeEmulation.cpp:255-259` | `setDPI` gives both canvases the main display's density | open |

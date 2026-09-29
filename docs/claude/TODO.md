@@ -120,31 +120,50 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
   5. Touch the GamePad screen area while the overlay is visible: touch still works.
 
 ## Phase 5: dual screen and multi-device
-- [ ] Research: `adb shell dumpsys display` on the Thor; Azahar and melonDS display selection; other dual-screen devices
-- [ ] Per-swapchain present mode or pacing (P8); per-canvas DPI (P10)
-- [ ] Auto-offer the pad on a second screen; persist swap screens; split ratio setting
-- [ ] Single-screen devices: dual options hidden, no behavior change
-- [ ] Build, install, commit
+- [x] Research: Azahar's secondary-display PRs #617, #1371 and #1385; the owner's own Azahar PR #1341; melonDS; Thor specs (FEATURE_RESEARCH.md §4)
+- [ ] `adb shell dumpsys display` on the Thor, to confirm how the bottom panel is exposed (needs USB debugging)
+- [?] Pad swapchain presents non-blocking (MAILBOX/IMMEDIATE) and never drives host vsync (P8), 76ac98f1
+- [~] Per-display pad DPI: `setPadDPI` from `PadPresentation`, reset when the pad returns to the main display (P10). Written, **not built yet** (the tool check failed; build before committing)
+- [~] Swap screens persisted; a one-time "Second screen detected: show GamePad there" snackbar. Written, **not built yet**
+- [~] Single-screen devices: "External PAD screen" and "Rotate external screen left" are hidden without a second display. Written, **not built yet**
+- [ ] Split ratio setting for the inline pad (instead of a fixed 50/50); display picker when there are 2+ candidates
 - **Device test:**
-  - Thor: 120 Hz main screen not throttled; pad touch maps correctly.
-  - Phone: no dual options.
+  - Thor: 120 Hz main screen not throttled when the pad is on the bottom screen (overlay FPS).
+  - Pad touch maps correctly; the pad notifications are sized right on the bottom screen.
+  - Swap screens is remembered after quitting.
+  - Thor, first launch after install: the "Second screen detected" snackbar appears once.
+  - Phone: no dual-screen options in the menu.
 
 ## Phase 6: performance
-- [ ] PPCTimer via `cntfrq_el0`; `_addcarry_u64` fix (P3)
-- [ ] ADPF performance hint sessions (runtime-loaded, API 33+), falling back to affinity; sustained-performance option (P2)
-- [ ] Vulkan pre-rotation (P1)
-- [ ] Guard the BotW fork path (P6); fix CPU% on Android (P7); review compile threads (P9)
-- [ ] Build, install, commit
-- **Device test:** boot time; overlay FPS before and after in the same scene.
+- [?] PPCTimer via `cntfrq_el0` (no 3 s wait at launch); `_addcarry_u64` fix (P3), 76ac98f1
+- [?] ADPF performance hint session for the PPC and GPU threads, frame reports vs 16.67 ms (P2), 76ac98f1. Later: adaptive target for 30 fps titles; sustained-performance option
+- [ ] Vulkan pre-rotation (P1). Engine work; measure before and after on the Thor
+- [?] BotW fork path guarded (P6), 76ac98f1. P7 is wontfix (per-core CPU only, not exposed on Android)
+- [ ] Review pipeline compile thread count and priority (P9)
+- **Device test:**
+  - Game launch is about 3 s faster (time from tap to first frame).
+  - Logcat shows `ADPF performance hints: available` on the Thor.
+  - Overlay FPS before and after in the same scene.
 
 ## Phase 7: feature research → FEATURE_RESEARCH.md
-- [ ] Survey (with sources): Eden/Citron/Sudachi, Azahar, melonDS, Dolphin, NetherSX2, PPSSPP, Vita3K, DuckStation, RetroArch, Winlator/GameHub, other Cemu Android forks
-- [ ] Deep dives the owner asked for: controller auto-mapping, save states (cemu PR #953, issue #2062), Eden-style driver manager, graphics options
-- [ ] Gap table + implementation notes (with code locations) + prioritized backlog below
+- [x] Survey with sources: Eden (driver fetcher, ADPF, overrides), Azahar (auto-map, secondary display, save states, surface fixes), Dolphin, PPSSPP, NetherSX2, Vita3K, other Cemu Android forks (2026-09-28)
+- [x] Deep dives the owner asked for: controller auto-map (Azahar PR #1769), save states (cemu PR #953, issue #2062), Eden driver fetcher (repos, API, recommendation table)
+- [x] Gap table, implementation notes, prioritized backlog (below)
+- [ ] Fill the remaining `?` cells of the gap table (web search was rate-limited on 2026-09-28)
 
-## Feature backlog (filled by Phase 7; each item becomes its own phase)
-- (empty)
+## Feature backlog (from FEATURE_RESEARCH.md; each item becomes its own phase)
+1. [ ] GPU driver fetcher (Eden-style): repo list, releases, download, install, GPU model plus recommendation
+2. [ ] Controller auto-map with a "press A" layout prompt; auto-apply a default profile per vendor:product
+3. [ ] More hotkeys: swap screens, toggle pad, pause, screenshot
+4. [ ] Dual-screen polish: display picker, mirror the TV, overlay on the second screen, split ratio
+5. [ ] Per-game controller profiles and overlay layouts
+6. [ ] Save backup/restore per title; single-file WUA/WUP install picker
+7. [ ] Overlay frametime graph, battery and temperature; sustained-performance toggle
+8. [ ] Amiibo picker (`nn_nfp`)
+9. [ ] Save states: experimental, fork-only; start from Cemu issue #2062 and PR #953
+10. [ ] Vulkan pre-rotation (P1) and an adaptive ADPF target
 
 ## Housekeeping
 - [x] Deleted the stray `%TEMP%\k.txt` left by a planning agent (2026-09-28)
-- [ ] B4 `vcpkg.json` duplicate hidapi; B5 dead `ENABLE_NSYSHID_LIBUSB` flag
+- [x] B4 `vcpkg.json` duplicate hidapi (95337964)
+- [ ] B5 dead `ENABLE_NSYSHID_LIBUSB` flag; B6 APK ships 32-bit/x86 libs from androidx (add `ndk.abiFilters`)

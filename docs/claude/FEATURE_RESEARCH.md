@@ -10,7 +10,7 @@ Every claim here has a source and an access date. Re-verify anything older than 
   3. An Eden-style GPU driver manager (download Turnip and others, plus local install) and more graphics options.
 - Dual screen for the AYN Thor and other devices.
 
-Status: **in progress** (Phase 7). The sections below are filled as research lands; the backlog at the bottom feeds TODO.md.
+Status: **first pass done** (2026-09-28). Every section is filled; the `?` cells in the gap table still need checking. The backlog at the bottom feeds TODO.md.
 
 ---
 
@@ -157,11 +157,50 @@ Status: **in progress** (Phase 7). The sections below are filled as research lan
 - **Azahar 2126:**
   - "Skip presenting duplicate frames" (default on), and an optional GPU-timing simulation (GitHub releases 2126.0/2126.1).
 
+**ADPF prior art:** Eden's `src/common/adpf.cpp` (eden-emulator/mirror, read 2026-09-28; GPL-3.0, so ideas only, no code copied into this MPL-2.0 project).
+- It loads `APerformanceHint_*` from `libandroid.so` at runtime.
+- It keeps a "Render" session with a 16.67 ms target and a "Background" session that prefers power efficiency (API 35+).
+- It reports the frame interval clamped to 4× the target.
+- It uses `setThreads` when available (API 34+), otherwise recreates the session.
+
+Ours (76ac98f1) follows the same approach with one session.
+- **Idea for later:** adapt the target to the title's real frame rate (30 fps titles), and put the pipeline compiler threads into a power-efficient session.
+
 ## 6. Game and data management
-(pending)
+**What we have** (Kotlin audit inventory, 2026-09-28):
+- **Game list:** search, favorites, per-game profile, remove shader caches, home-screen shortcuts.
+- **Title manager:**
+  - Filters by type, format and location.
+  - Installs from a folder, with progress and cancel.
+  - Deletes titles.
+  - Converts to WUA.
+- **Custom data root with SAF save mirroring** (dual branch, `CemuDataStorage.kt`).
+
+**Missing, which others commonly have:**
+- Cover art or boxart (Dolphin, Eden and Azahar show game art in the grid; ours shows the title icon only).
+- **Save export/import per title**: backup and restore of a single game's save as a zip. Most useful for moving between devices.
+- **Installing single-file WUA/WUP through a file picker** (today: install from a folder only).
+- A long-running install/convert as a **foreground service**, so it survives backgrounding (K13).
+- **Shader cache import/export** (Cemu's transferable caches are portable between devices of the same driver family).
+- Play-time and last-played display exists, but there are no sorting options (recent, most played).
 
 ## 7. Input and controls (beyond auto-map)
-(pending)
+**What we have:**
+- 8 controller slots with type selection (GamePad, Pro, Classic, Wiimote) and per-button mapping.
+- Controller and phone rumble.
+- Motion from controller sensors (Android 12+) or the phone.
+- An input overlay with an editor (move and resize, opacity, per-button visibility).
+- 3 hotkey actions (quit, menu, USB devices).
+- Touch on both screens.
+
+**Missing, or weaker than others:**
+- **Auto-map** (§2).
+- Per-game controller profiles.
+- Profile import/export.
+- More hotkeys: swap screens, toggle pad, screenshot, pause, fast-forward (Eden, Azahar and Dolphin have larger hotkey sets).
+- Per-screen overlay layouts (portrait/landscape, dual screen), plus an overlay on the second screen (Azahar issue #1978).
+- **Amiibo:** Cemu supports NFC via `nn_nfp` loading amiibo `.bin` files. Android has no UI to pick one, and it would need a file picker plus a JNI call (check `Cafe/OS/libs/nn_nfp`).
+- Mouse and keyboard for the pointer or touch (Winlator-style) is out of scope.
 
 ---
 
@@ -188,4 +227,28 @@ Only facts verified from the sources above are marked. `✓` = has it, `–` = v
 **Sources:** the sections above. Also Dolphin (androidauthority.com 2503 update; retroachievements.org forum topic 33323), PPSSPP (ppsspp.org; 1.20 in March 2026 added native DualSense support and portrait mode), NetherSX2 (netherx2.org), and Vita3K (heldgames.com guide; it clears the shader cache when the driver changes). All read 2026-09-28.
 
 ## Prioritized backlog → TODO.md
-(pending)
+Ordered by value to the owner divided by cost. Each item becomes its own phase with the usual build → device test → tick loop, and each needs a short re-check of the sources above before starting.
+
+1. **GPU driver fetcher (Eden-style).**
+   - **Why:** the owner asked for it explicitly, it has a large performance/compatibility impact on Adreno, and it mostly reuses existing install code.
+   - **Scope:**
+     - Repo list and release list from the GitHub API.
+     - Download, then verify it's a zip with `meta.json`.
+     - Install via the existing `CustomDriversViewModel` path.
+     - GPU name via JNI (`vkGetPhysicalDeviceProperties`), plus the recommendation table.
+   - **Risks:**
+     - The GitHub API limit is 60 requests/hour unauthenticated, so cache results.
+     - The repo list goes stale; keep it in one Kotlin file and re-check the repos when touching it.
+2. **Controller auto-map with a layout prompt (Azahar-style)**, plus a default profile auto-applied when a known controller connects.
+3. **More hotkeys:** swap screens, toggle pad, pause, screenshot. Cheap, and it helps dual-screen users.
+4. **Dual-screen polish:**
+   - A display picker and per-display memory.
+   - The option to mirror the TV on the second screen.
+   - The overlay on the second screen.
+   - Split ratio for single-screen devices.
+5. **Per-game controller profiles and overlay layouts.**
+6. **Save backup/restore per title (zip)**, plus a single-file WUA/WUP install picker.
+7. **Frametime graph and battery/temperature readout** in the overlay; sustained-performance toggle.
+8. **Amiibo picker** (`nn_nfp`).
+9. **Save states.** Large; fork-only. Start from Cemu issue #2062 and PR #953, and prototype on one game. Clarify with the owner how much instability is acceptable (experimental flag).
+10. **Vulkan pre-rotation (P1)** and **adaptive ADPF target**: engine work, measured with before/after FPS on the Thor.
