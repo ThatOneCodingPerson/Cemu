@@ -19,6 +19,10 @@
 
 #include "Cafe/CafeSystem.h"
 
+#if BOOST_PLAT_ANDROID
+#include "Common/android/PerformanceHint.h"
+#endif
+
 LatteGPUState_t LatteGPUState = {};
 
 std::atomic_bool sLatteThreadRunning = false;
@@ -115,6 +119,9 @@ void LatteThread_HandleOSScreen()
 int Latte_ThreadEntry()
 {
 	SetThreadName("LatteThread");
+#if BOOST_PLAT_ANDROID
+	AndroidPerformanceHint::AddCurrentThread();
+#endif
 	sint32 w,h;
 	WindowSystem::GetWindowPhysSize(w,h);
 

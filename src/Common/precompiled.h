@@ -430,10 +430,12 @@ inline void _mm_mfence()
 
 inline unsigned char _addcarry_u64(unsigned char carry, unsigned long long a, unsigned long long b, unsigned long long *result)
 {
-    *result = a + b + (unsigned long long)carry;
-    if (*result < a)
-        return 1;
-    return 0;
+    // both additions can overflow (e.g. b = ~0 with carry = 1)
+    unsigned long long sum;
+    unsigned char carryOut = __builtin_add_overflow(a, b, &sum);
+    carryOut |= __builtin_add_overflow(sum, (unsigned long long)carry, &sum);
+    *result = sum;
+    return carryOut;
 }
 
 #endif

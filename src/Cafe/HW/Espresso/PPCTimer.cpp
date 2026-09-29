@@ -77,6 +77,18 @@ int PPCTimer_initThread()
 
 void PPCTimer_init()
 {
+#if defined(__aarch64__)
+	// the generic timer (cntvct_el0, used as __rdtsc on aarch64) reports its exact frequency. Measuring it takes
+	// 3 seconds and launching a title waits for it
+	uint64 counterFrequency = 0;
+	asm volatile("mrs %0, cntfrq_el0" : "=r"(counterFrequency));
+	if (counterFrequency != 0)
+	{
+		_rdtscFrequency = counterFrequency;
+		_rdtscLastMeasure = __rdtsc();
+		return;
+	}
+#endif
 	std::thread t(PPCTimer_initThread);
 	t.detach();
 	_rdtscLastMeasure = __rdtsc();

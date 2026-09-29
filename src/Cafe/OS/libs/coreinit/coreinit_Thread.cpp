@@ -14,6 +14,9 @@
 #include "util/Fiber/Fiber.h"
 
 #include "util/helpers/helpers.h"
+#if BOOST_PLAT_ANDROID
+#include "Common/android/PerformanceHint.h"
+#endif
 
 #ifdef __arm64__
 #if defined(__clang__)
@@ -1446,6 +1449,9 @@ namespace coreinit
 			std::lock_guard schedulerThreadIdsLockGuard(g_schedulerThreadIdsLock);
 			g_schedulerThreadIds.emplace_back(tid);
 		}
+#endif
+#if BOOST_PLAT_ANDROID
+		AndroidPerformanceHint::AddCurrentThread();
 #endif
 
 		t_schedulerFiber = Fiber::PrepareCurrentThread();

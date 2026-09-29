@@ -414,6 +414,19 @@ VkExtent2D SwapchainInfoVk::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& cap
 VkPresentModeKHR SwapchainInfoVk::ChoosePresentMode(const std::vector<VkPresentModeKHR>& modes)
 {
 	m_maxQueued = 0;
+#if BOOST_PLAT_ANDROID
+	// The GamePad is presented from the same thread as the TV. With FIFO on a slower second display (e.g. the AYN
+	// Thor's 60 Hz bottom screen next to its 120 Hz main screen) each pad present waits for that display's vsync and
+	// throttles the TV output. Present the pad without blocking; the TV keeps pacing emulation.
+	if (!mainWindow)
+	{
+		for (VkPresentModeKHR nonBlockingMode : {VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_IMMEDIATE_KHR})
+		{
+			if (std::find(modes.cbegin(), modes.cend(), nonBlockingMode) != modes.cend())
+				return nonBlockingMode;
+		}
+	}
+#endif
 	const auto vsyncState = (VSync)GetConfig().vsync.GetValue();
 	if (vsyncState == VSync::MAILBOX)
 	{
@@ -431,7 +444,9 @@ VkPresentModeKHR SwapchainInfoVk::ChoosePresentMode(const std::vector<VkPresentM
 	}
 	else if (vsyncState == VSync::SYNC_AND_LIMIT)
 	{
-		LatteTiming_EnableHostDrivenVSync();
+		// only the TV output may drive the emulated vsync
+		if (mainWindow)
+			LatteTiming_EnableHostDrivenVSync();
 		// use immediate mode if available, other wise fall back to
 		//if (std::find(modes.cbegin(), modes.cend(), VK_PRESENT_MODE_IMMEDIATE_KHR) != modes.cend())
 		//	return VK_PRESENT_MODE_IMMEDIATE_KHR;

@@ -13,6 +13,9 @@
 #include "Cafe/HW/Latte/LegacyShaderDecompiler/LatteDecompiler.h"
 
 #include "Cafe/CafeSystem.h"
+#if BOOST_PLAT_ANDROID
+#include "Common/android/PerformanceHint.h"
+#endif
 
 #include "util/helpers/helpers.h"
 #include "util/helpers/StringHelpers.h"
@@ -345,7 +348,7 @@ void VulkanRenderer::GetDeviceFeatures()
 	cemuLog_log(LogType::Force, fmt::format("VulkanLimits: UBAlignment {0} nonCoherentAtomSize {1}", prop2.properties.limits.minUniformBufferOffsetAlignment, prop2.properties.limits.nonCoherentAtomSize));
 }
 
-#if BOOST_OS_LINUX
+#if BOOST_OS_LINUX && !BOOST_PLAT_ANDROID // desktop Mesa RADV only; never fork() an Android app process
 #include <sys/wait.h>
 #include "resource/IconsFontAwesome5.h"
 
@@ -535,7 +538,7 @@ VulkanRenderer::VulkanRenderer()
 		throw std::runtime_error("Unable to load instanced Vulkan functions");
 
 	// Workaround for BOTW + RADV. Runes like Magnesis and the camera cause GPU crashes.
-#if BOOST_OS_LINUX
+#if BOOST_OS_LINUX && !BOOST_PLAT_ANDROID
 	uint64 currentTitleId = CafeSystem::GetForegroundTitleId();
 	if (currentTitleId == 0x00050000101c9500 || currentTitleId == 0x00050000101c9400 || currentTitleId == 0x00050000101c9300)
 	{
@@ -3356,7 +3359,12 @@ void VulkanRenderer::SwapBuffers(bool swapTV, bool swapDRC)
 	SubmitCommandBuffer();
 
 	if (swapTV && IsSwapchainInfoValid(true))
+	{
 		SwapBuffer(true);
+#if BOOST_PLAT_ANDROID
+		AndroidPerformanceHint::ReportFrame();
+#endif
+	}
 
 	if (swapDRC && IsSwapchainInfoValid(false))
 		SwapBuffer(false);

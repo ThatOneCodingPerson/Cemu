@@ -62,6 +62,8 @@ if(ANDROID)
     android/FileStream_saf.h
     android/FilesystemAndroid.cpp
     android/FilesystemAndroid.h
+    android/PerformanceHint.cpp
+    android/PerformanceHint.h
   )
 endif()
 
