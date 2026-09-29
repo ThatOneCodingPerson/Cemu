@@ -53,13 +53,10 @@ abstract class Input protected constructor(
     }
 
     fun resize(diffX: Int, diffY: Int, maxWidth: Int, maxHeight: Int, minWidthHeight: Int) {
-        val newRight = rect.right + diffX
-        val newBottom = rect.bottom + diffY
-        if (newRight - rect.left < minWidthHeight
-            || newBottom - rect.top < minWidthHeight
-            || newRight > maxWidth
-            || newBottom > maxHeight
-        ) {
+        // clamped per axis: at an edge the other axis still resizes
+        val newRight = (rect.right + diffX).coerceIn(rect.left + minWidthHeight, maxOf(maxWidth, rect.left + minWidthHeight))
+        val newBottom = (rect.bottom + diffY).coerceIn(rect.top + minWidthHeight, maxOf(maxHeight, rect.top + minWidthHeight))
+        if (newRight == rect.right && newBottom == rect.bottom) {
             return
         }
         rect = Rect(

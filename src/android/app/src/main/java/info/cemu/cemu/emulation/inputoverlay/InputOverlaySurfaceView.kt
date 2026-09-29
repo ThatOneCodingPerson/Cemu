@@ -103,11 +103,9 @@ class InputOverlaySurfaceView(context: Context) : SurfaceView(context), OnTouchL
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        if (oldw == 0 || oldh == 0) {
-            setInputs()
-        }
-
         super.onSizeChanged(w, h, oldw, oldh)
+        // rebuilt for every size: default positions depend on it and saved ones must be fitted into it
+        setInputs()
     }
 
     fun setInputMode(inputMode: InputMode) {
@@ -312,17 +310,25 @@ class InputOverlaySurfaceView(context: Context) : SurfaceView(context), OnTouchL
 
     private fun getBoundingRectangleForInput(input: OverlayInput): Rect {
         val rect = settings.inputOverlayRectMap[input.toConfig()]
+            ?.let { fitIntoView(Rect(it.left, it.top, it.right, it.bottom)) }
 
-        if (rect != null) {
-            return Rect(
-                rect.left,
-                rect.top,
-                rect.right,
-                rect.bottom
-            )
+        return rect ?: getDefaultRectangle(input.toConfig(), width, height, pixelDensity)
+    }
+
+    /**
+     * Saved rectangles are absolute pixels of the screen they were edited on (another device, or the other screen
+     * of a dual-screen device). One that sticks out is moved back into the view; one that is empty or doesn't fit
+     * falls back to the default position (null).
+     */
+    private fun fitIntoView(rect: Rect): Rect? {
+        if (rect.isEmpty || rect.width() > width || rect.height() > height) {
+            return null
         }
-
-        return getDefaultRectangle(input.toConfig(), width, height, pixelDensity)
+        rect.offset(
+            (-rect.left).coerceAtLeast(0) + (width - rect.right).coerceAtMost(0),
+            (-rect.top).coerceAtLeast(0) + (height - rect.bottom).coerceAtMost(0),
+        )
+        return rect
     }
 
     private fun MutableList<Pair<OverlayInput, Input>>.addRoundButton(
@@ -450,7 +456,9 @@ class InputOverlaySurfaceView(context: Context) : SurfaceView(context), OnTouchL
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
         setWillNotDraw(false)
-        requestFocus()
+        if (changed) {
+            requestFocus()
+        }
     }
 
     override fun draw(canvas: Canvas) {
@@ -503,6 +511,9 @@ class InputOverlaySurfaceView(context: Context) : SurfaceView(context), OnTouchL
         return false
     }
 
+    private var resizeLastX = 0f
+    private var resizeLastY = 0f
+
     private fun onEditSize(event: MotionEvent): Boolean {
         val configuredInput = currentConfiguredInput
 
@@ -512,6 +523,8 @@ class InputOverlaySurfaceView(context: Context) : SurfaceView(context), OnTouchL
             for ((_, input) in inputs) {
                 if (input.isInside(x, y)) {
                     currentConfiguredInput = input
+                    resizeLastX = x
+                    resizeLastY = y
                     val color = resources.getColor(R.color.red, context.theme)
                     input.enableDrawingBoundingRect(color)
                     return true
@@ -530,19 +543,20 @@ class InputOverlaySurfaceView(context: Context) : SurfaceView(context), OnTouchL
         }
 
         if (event.actionMasked == MotionEvent.ACTION_MOVE) {
-            val histSize = event.historySize
-            if (event.historySize >= 2) {
-                val x1 = event.getHistoricalX(0)
-                val y1 = event.getHistoricalY(0)
-                val x2 = event.getHistoricalX(histSize - 1)
-                val y2 = event.getHistoricalY(histSize - 1)
+            // the whole movement since the last applied step; only using the samples batched into one event
+            // dropped most of it (K27). The fraction of a pixel that isn't applied is kept for the next event.
+            val diffX = (event.x - resizeLastX).toInt()
+            val diffY = (event.y - resizeLastY).toInt()
+            if (diffX != 0 || diffY != 0) {
                 configuredInput.resize(
-                    diffX = (x2 - x1).toInt(),
-                    diffY = (y2 - y1).toInt(),
+                    diffX = diffX,
+                    diffY = diffY,
                     maxWidth = width,
                     maxHeight = height,
                     minWidthHeight = inputsMinSize
                 )
+                resizeLastX += diffX
+                resizeLastY += diffY
             }
             return true
         }
