@@ -19,6 +19,7 @@
 #endif // HAS_CUBEB
 
 #include <android/native_window_jni.h>
+#include <dlfcn.h>
 
 // forward declaration from main.cpp
 void CemuCommonInit();
@@ -312,6 +313,61 @@ extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeEmulation_supportsLoadingCustomDriver([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
 {
 	return SupportsLoadingCustomDriver();
+}
+
+// Returns {device name, driver version, Vulkan version} of the system driver or null, for the driver download screen.
+// Uses its own instance from the system loader, so it neither needs nor touches the emulator's Vulkan state (which
+// may use a custom driver). The loader stays loaded, unloading vendor drivers isn't safe on every device.
+extern "C" [[maybe_unused]] JNIEXPORT jobjectArray JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeEmulation_getSystemGpuInfo(JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	void* loader = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
+	if (!loader)
+		return nullptr;
+	auto getInstanceProcAddr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(dlsym(loader, "vkGetInstanceProcAddr"));
+	if (!getInstanceProcAddr)
+		return nullptr;
+	auto createInstance = reinterpret_cast<PFN_vkCreateInstance>(getInstanceProcAddr(VK_NULL_HANDLE, "vkCreateInstance"));
+	if (!createInstance)
+		return nullptr;
+
+	VkApplicationInfo appInfo{VK_STRUCTURE_TYPE_APPLICATION_INFO};
+	appInfo.pApplicationName = EMULATOR_NAME;
+	appInfo.apiVersion = VK_API_VERSION_1_1;
+	VkInstanceCreateInfo createInfo{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
+	createInfo.pApplicationInfo = &appInfo;
+	VkInstance instance = VK_NULL_HANDLE;
+	if (createInstance(&createInfo, nullptr, &instance) != VK_SUCCESS)
+		return nullptr;
+
+	auto destroyInstance = reinterpret_cast<PFN_vkDestroyInstance>(getInstanceProcAddr(instance, "vkDestroyInstance"));
+	auto enumeratePhysicalDevices = reinterpret_cast<PFN_vkEnumeratePhysicalDevices>(getInstanceProcAddr(instance, "vkEnumeratePhysicalDevices"));
+	auto getPhysicalDeviceProperties = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties>(getInstanceProcAddr(instance, "vkGetPhysicalDeviceProperties"));
+	std::optional<VkPhysicalDeviceProperties> properties;
+	if (enumeratePhysicalDevices && getPhysicalDeviceProperties)
+	{
+		uint32_t deviceCount = 1;
+		VkPhysicalDevice device = VK_NULL_HANDLE;
+		VkResult result = enumeratePhysicalDevices(instance, &deviceCount, &device);
+		if ((result == VK_SUCCESS || result == VK_INCOMPLETE) && deviceCount > 0)
+		{
+			properties.emplace();
+			getPhysicalDeviceProperties(device, &*properties);
+		}
+	}
+	if (destroyInstance)
+		destroyInstance(instance, nullptr);
+	if (!properties)
+		return nullptr;
+
+	// driverVersion is vendor defined; Qualcomm and Mesa both use the classic 10/10/12 bit layout (e.g. 512.744.0)
+	uint32 driverVersion = properties->driverVersion;
+	std::vector<std::string> info{
+		std::string(properties->deviceName, strnlen(properties->deviceName, VK_MAX_PHYSICAL_DEVICE_NAME_SIZE)),
+		fmt::format("{}.{}.{}", driverVersion >> 22, (driverVersion >> 12) & 0x3FF, driverVersion & 0xFFF),
+		fmt::format("{}.{}.{}", VK_API_VERSION_MAJOR(properties->apiVersion), VK_API_VERSION_MINOR(properties->apiVersion), VK_API_VERSION_PATCH(properties->apiVersion)),
+	};
+	return JNIUtils::CreateStringObjectArray(env, info);
 }
 
 // Publishes the window of a canvas for the GPU thread, which creates the Vulkan surface/swapchain for it (see

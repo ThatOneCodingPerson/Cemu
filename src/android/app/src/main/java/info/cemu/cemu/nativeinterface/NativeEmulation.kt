@@ -71,6 +71,13 @@ object NativeEmulation {
     @JvmStatic
     external fun supportsLoadingCustomDriver(): Boolean
 
+    /**
+     * Probes the system Vulkan driver: {device name, driver version, Vulkan version}, or null. Takes tens of
+     * milliseconds, call off the main thread.
+     */
+    @JvmStatic
+    external fun getSystemGpuInfo(): Array<String>?
+
     /** Terminates the emulation process after flushing logs. Never returns. */
     @JvmStatic
     external fun quitProcess()

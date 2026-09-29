@@ -1,0 +1,117 @@
+[
+ {
+  "url": "https://api.github.com/repos/K11MCH1/AdrenoToolsDrivers/releases/253188608",
+  "id": 253188608,
+  "tag_name": "v25.3.0-rc.11",
+  "name": " v25.3.0 - Revision 11",
+  "draft": false,
+  "prerelease": false,
+  "created_at": "2025-10-08T21:23:08Z",
+  "published_at": "2025-10-09T00:10:43Z",
+  "assets": [
+   {
+    "id": 302115239,
+    "name": "Turnip_v25.3.0_R11.zip",
+    "content_type": "application/x-zip-compressed",
+    "size": 3365701,
+    "browser_download_url": "https://github.com/K11MCH1/AdrenoToolsDrivers/releases/download/v25.3.0-rc.11/Turnip_v25.3.0_R11.zip"
+   }
+  ]
+ },
+ {
+  "url": "https://api.github.com/repos/K11MCH1/AdrenoToolsDrivers/releases/251078776",
+  "id": 251078776,
+  "tag_name": "v842.6",
+  "name": "Qualcomm Driver v842.6",
+  "draft": false,
+  "prerelease": false,
+  "created_at": "2025-05-01T08:20:11Z",
+  "published_at": "2025-09-30T10:56:28Z",
+  "assets": [
+   {
+    "id": 298869170,
+    "name": "8Elite2-842.6.zip",
+    "content_type": "application/x-zip-compressed",
+    "size": 12201469,
+    "browser_download_url": "https://github.com/K11MCH1/AdrenoToolsDrivers/releases/download/v842.6/8Elite2-842.6.zip"
+   }
+  ]
+ },
+ {
+  "url": "https://api.github.com/repos/K11MCH1/AdrenoToolsDrivers/releases/239536551",
+  "id": 239536551,
+  "tag_name": "v819.2",
+  "name": "Qualcomm v819.2",
+  "draft": false,
+  "prerelease": false,
+  "created_at": "2025-05-01T08:20:11Z",
+  "published_at": "2025-08-13T03:02:55Z",
+  "assets": [
+   {
+    "id": 298869148,
+    "name": "8Elite2-842.6.zip",
+    "content_type": "application/x-zip-compressed",
+    "size": 12201469,
+    "browser_download_url": "https://github.com/K11MCH1/AdrenoToolsDrivers/releases/download/v819.2/8Elite2-842.6.zip"
+   },
+   {
+    "id": 282008386,
+    "name": "Qualcomm_819.2_adpkg.zip",
+    "content_type": "application/x-zip-compressed",
+    "size": 13076862,
+    "browser_download_url": "https://github.com/K11MCH1/AdrenoToolsDrivers/releases/download/v819.2/Qualcomm_819.2_adpkg.zip"
+   }
+  ]
+ },
+ {
+  "url": "https://api.github.com/repos/K11MCH1/AdrenoToolsDrivers/releases/251410713",
+  "id": 251410713,
+  "tag_name": "v25.3.0-rc.10",
+  "name": " v25.3.0 - Revision 10",
+  "draft": false,
+  "prerelease": false,
+  "created_at": "2025-05-01T08:20:11Z",
+  "published_at": "2025-10-01T12:57:56Z",
+  "assets": [
+   {
+    "id": 299302466,
+    "name": "Turnip_v25.3.0_R10.zip",
+    "content_type": "application/x-zip-compressed",
+    "size": 3374189,
+    "browser_download_url": "https://github.com/K11MCH1/AdrenoToolsDrivers/releases/download/v25.3.0-rc.10/Turnip_v25.3.0_R10.zip"
+   }
+  ]
+ },
+ {
+  "id": 1,
+  "tag_name": "no-zip",
+  "name": "",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-01-01T00:00:00Z",
+  "assets": [
+   {
+    "id": 2,
+    "name": "notes.txt",
+    "size": 10,
+    "browser_download_url": "https://example.invalid/notes.txt"
+   }
+  ]
+ },
+ {
+  "id": 3,
+  "tag_name": "draft",
+  "name": "Draft",
+  "draft": true,
+  "prerelease": false,
+  "published_at": null,
+  "assets": [
+   {
+    "id": 4,
+    "name": "d.zip",
+    "size": 10,
+    "browser_download_url": "https://example.invalid/d.zip"
+   }
+  ]
+ }
+]

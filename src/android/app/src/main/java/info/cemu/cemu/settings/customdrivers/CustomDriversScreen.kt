@@ -22,6 +22,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +48,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun CustomDriversScreen(
     navigateBack: () -> Unit,
+    goToDriverDownload: () -> Unit,
     customDriversViewModel: CustomDriversViewModel = viewModel(),
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -56,16 +58,16 @@ fun CustomDriversScreen(
     val isDriverInstallInProgress by customDriversViewModel.isDriverInstallInProgress.collectAsState()
     val context = LocalContext.current
 
+    LaunchedEffect(Unit) {
+        customDriversViewModel.refresh()
+    }
+
     val customDriversInstallLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri == null) return@rememberLauncherForActivityResult
 
             customDriversViewModel.installDriver(context, uri) { installStatus ->
-                val message = when (installStatus) {
-                    DriverInstallStatus.AlreadyInstalled -> tr("Driver already installed")
-                    DriverInstallStatus.ErrorInstalling -> tr("Failed to install driver")
-                    DriverInstallStatus.Installed -> tr("Driver installed successfully")
-                }
+                val message = driverInstallStatusMessage(installStatus)
 
                 coroutineScope.launch {
                     snackbarHostState.currentSnackbarData?.dismiss()
@@ -79,6 +81,12 @@ fun CustomDriversScreen(
         appBarText = tr("Custom drivers"),
         navigateBack = navigateBack,
         actions = {
+            IconButton(onClick = goToDriverDownload) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_download),
+                    contentDescription = tr("Download drivers")
+                )
+            }
             IconButton(onClick = { customDriversInstallLauncher.launch(arrayOf("application/zip")) }) {
                 Icon(
                     painter = painterResource(R.drawable.ic_add),
