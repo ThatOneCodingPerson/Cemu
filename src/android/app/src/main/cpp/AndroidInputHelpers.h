@@ -33,5 +33,8 @@ class EmulatedControllerManager
 
 	EmulatedControllerPtr GetControllerPtr() const;
 
+	// after InputManager replaced the controller (e.g. a profile was loaded)
+	void Reload();
+
 	void ClearMapping(uint64 mapping);
 };

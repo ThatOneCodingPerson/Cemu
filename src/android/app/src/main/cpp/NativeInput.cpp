@@ -5,6 +5,7 @@
 #include "input/InputManager.h"
 #include "JNIUtils.h"
 #include "input/emulated/EmulatedController.h"
+#include "config/ActiveSettings.h"
 
 #include <android/sensor.h>
 
@@ -525,4 +526,61 @@ extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeInput_saveInputs([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
 {
 	InputManager::instance().save();
+}
+
+// Named controller profiles: controllerProfiles/<name>.xml, like desktop Cemu. Game profiles can pick them per
+// controller ([Controller] controllerN = name), InputManager::apply_game_profile loads them at game start.
+
+extern "C" [[maybe_unused]] JNIEXPORT jobjectArray JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeInput_getControllerProfiles(JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	std::vector<std::string> profiles;
+	JNIUtils::HandleNativeException(env, [&]() { profiles = InputManager::get_profiles(); });
+	return JNIUtils::CreateStringObjectArray(env, profiles);
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeInput_isValidControllerProfileName(JNIEnv* env, [[maybe_unused]] jclass clazz, jstring name)
+{
+	return InputManager::is_valid_profilename(JNIUtils::FromJString(env, name));
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeInput_saveControllerProfile(JNIEnv* env, [[maybe_unused]] jclass clazz, jint index, jstring name)
+{
+	jboolean result = false;
+	JNIUtils::HandleNativeException(env, [&]() {
+		const std::string profileName = JNIUtils::FromJString(env, name);
+		result = InputManager::is_valid_profilename(profileName) && InputManager::instance().save(index, profileName);
+	});
+	return result;
+}
+
+// Loads the profile into the controller and makes it that controller's current configuration (controllerN.xml).
+extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeInput_loadControllerProfile(JNIEnv* env, [[maybe_unused]] jclass clazz, jint index, jstring name)
+{
+	jboolean result = false;
+	JNIUtils::HandleNativeException(env, [&]() {
+		const std::string profileName = JNIUtils::FromJString(env, name);
+		if (!InputManager::is_valid_profilename(profileName) || !InputManager::instance().load(index, profileName))
+			return;
+		EmulatedControllerManager::GetController(index).Reload();
+		result = InputManager::instance().save(index);
+	});
+	return result;
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeInput_deleteControllerProfile(JNIEnv* env, [[maybe_unused]] jclass clazz, jstring name)
+{
+	jboolean result = false;
+	JNIUtils::HandleNativeException(env, [&]() {
+		const std::string profileName = JNIUtils::FromJString(env, name);
+		if (!InputManager::is_valid_profilename(profileName))
+			return;
+		std::error_code ec;
+		result = fs::remove(ActiveSettings::GetConfigPath("controllerProfiles/{}.xml", profileName), ec);
+	});
+	return result;
 }

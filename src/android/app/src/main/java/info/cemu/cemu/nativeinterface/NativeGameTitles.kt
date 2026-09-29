@@ -201,6 +201,13 @@ object NativeGameTitles {
     @JvmStatic
     external fun refreshCafeTitleList()
 
+    /** Named controller profile the game loads for controller [controllerIndex] at start, null for none. */
+    @JvmStatic
+    external fun getControllerProfileForTitle(titleId: Long, controllerIndex: Int): String?
+
+    @JvmStatic
+    external fun setControllerProfileForTitle(titleId: Long, controllerIndex: Int, profile: String?)
+
     /** Loads keys added to keys.txt and rescans the titles if there were any. Returns the number of new keys. */
     @JvmStatic
     external fun reloadKeys(): Int

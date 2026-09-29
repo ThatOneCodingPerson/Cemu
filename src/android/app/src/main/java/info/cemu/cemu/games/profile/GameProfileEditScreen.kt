@@ -18,6 +18,7 @@ import info.cemu.cemu.common.ui.localization.tr
 import info.cemu.cemu.nativeinterface.NativeEmulation
 import info.cemu.cemu.nativeinterface.NativeGameTitles
 import info.cemu.cemu.nativeinterface.NativeGameTitles.DriverSettingMode
+import info.cemu.cemu.nativeinterface.NativeInput
 
 @Composable
 fun GameProfileEditScreen(
@@ -99,6 +100,28 @@ fun GameProfileEditScreen(
                 choiceToString = ::customDriverSettingChoiceToString,
                 onChoiceChanged = viewModel::setSelectedDriverSetting,
             )
+        }
+        // named profiles (Input settings > Controller > Profiles) loaded at game start instead of the normal
+        // configuration; only for configured controllers or ones this game already sets
+        val controllerProfileChoices = remember(titleId) {
+            val profiles = NativeInput.getControllerProfiles().toList()
+            (0..<NativeInput.MAX_CONTROLLERS).mapNotNull { index ->
+                val current = NativeGameTitles.getControllerProfileForTitle(titleId, index)
+                if (NativeInput.isControllerDisabled(index) && current == null)
+                    return@mapNotNull null
+                index to (listOf<String?>(null) + profiles + listOfNotNull(current?.takeIf { it !in profiles }))
+            }
+        }
+        if (controllerProfileChoices.any { (_, choices) -> choices.size > 1 }) {
+            controllerProfileChoices.forEach { (index, choices) ->
+                SingleSelection(
+                    label = tr("Controller {0} profile", index + 1),
+                    initialChoice = { NativeGameTitles.getControllerProfileForTitle(titleId, index) },
+                    choices = choices,
+                    choiceToString = { it ?: tr("Normal configuration") },
+                    onChoiceChanged = { NativeGameTitles.setControllerProfileForTitle(titleId, index, it) },
+                )
+            }
         }
     }
 }

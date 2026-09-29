@@ -139,6 +139,11 @@ EmulatedControllerPtr EmulatedControllerManager::GetControllerPtr() const
 	return m_emulatedController;
 }
 
+void EmulatedControllerManager::Reload()
+{
+	m_emulatedController = InputManager::instance().get_controller(m_index);
+}
+
 void EmulatedControllerManager::ClearMapping(uint64 mapping)
 {
 	if (!m_emulatedController)

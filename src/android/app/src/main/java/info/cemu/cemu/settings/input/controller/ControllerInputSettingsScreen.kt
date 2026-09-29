@@ -36,6 +36,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -96,6 +97,8 @@ fun ControllerInputSettingsScreen(
     var showMapAllInputsDialog by rememberSaveable { mutableStateOf(false) }
     var controllerToMap by remember { mutableStateOf<InputController?>(null) }
     var showControllerSettingsDialog by rememberSaveable { mutableStateOf(false) }
+    var showProfilesDialog by rememberSaveable { mutableStateOf(false) }
+    val controllerProfiles by viewModel.controllerProfiles.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -121,6 +124,8 @@ fun ControllerInputSettingsScreen(
         appBarText = tr("Controller {0}", controllerIndex + 1),
         navigateBack = navigateBack,
     ) {
+        // keyed: loading a profile can change the type
+        key(controllerType) {
         SingleSelection(
             isChoiceEnabled = viewModel::isControllerTypeAllowed,
             label = tr("Emulated controller"),
@@ -135,6 +140,7 @@ fun ControllerInputSettingsScreen(
             choiceToString = { controllerTypeToString(it) },
             onChoiceChanged = viewModel::setControllerType
         )
+        }
 
         if (controllerType == EmulatedControllerType.DISABLED) {
             return@ScreenContent
@@ -153,6 +159,13 @@ fun ControllerInputSettingsScreen(
                 refreshControllers { showControllerSettingsDialog = true }
             }) {
                 Text(tr("Controller settings"))
+            }
+
+            Button(onClick = {
+                viewModel.refreshControllerProfiles()
+                showProfilesDialog = true
+            }) {
+                Text(tr("Profiles"))
             }
         }
 
@@ -223,6 +236,32 @@ fun ControllerInputSettingsScreen(
                 controllerToMap = null
             },
             onDismiss = { controllerToMap = null },
+        )
+    }
+
+    if (showProfilesDialog) {
+        ControllerProfilesDialog(
+            profiles = controllerProfiles,
+            isValidName = viewModel::isValidProfileName,
+            onSave = { name ->
+                viewModel.saveProfile(name) { saved ->
+                    snackbarHostState.showMessage(
+                        coroutineScope,
+                        if (saved) tr("Saved profile {0}", name) else tr("Failed to save the profile")
+                    )
+                }
+            },
+            onLoad = { name ->
+                viewModel.loadProfile(name) { loaded ->
+                    snackbarHostState.showMessage(
+                        coroutineScope,
+                        if (loaded) tr("Loaded profile {0}", name) else tr("Failed to load the profile")
+                    )
+                }
+                showProfilesDialog = false
+            },
+            onDelete = viewModel::deleteProfile,
+            onDismiss = { showProfilesDialog = false },
         )
     }
 

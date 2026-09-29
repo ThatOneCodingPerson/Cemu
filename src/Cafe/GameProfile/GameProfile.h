@@ -46,6 +46,7 @@ public:
 	[[nodiscard]] bool IsAudioDisabled() const { return m_disableAudio; }
 
 	[[nodiscard]] const std::array< std::optional<std::string>, 8>& GetControllerProfile() const { return m_controllerProfile; }
+	void SetControllerProfile(size_t index, std::optional<std::string> profile) { m_controllerProfile.at(index) = std::move(profile); }
 
 #if BOOST_PLAT_ANDROID
   public:

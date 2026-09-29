@@ -178,6 +178,24 @@ object NativeInput {
     @JvmStatic
     external fun setControllerType(index: Int, emulatedControllerType: Int)
 
+    /** Named controller profiles (controllerProfiles/<name>.xml), like desktop Cemu. */
+    @JvmStatic
+    external fun getControllerProfiles(): Array<String>
+
+    /** Valid file name and not a reserved "controllerN" name. */
+    @JvmStatic
+    external fun isValidControllerProfileName(name: String): Boolean
+
+    @JvmStatic
+    external fun saveControllerProfile(index: Int, name: String): Boolean
+
+    /** Loads the profile into controller [index] and makes it that controller's configuration. */
+    @JvmStatic
+    external fun loadControllerProfile(index: Int, name: String): Boolean
+
+    @JvmStatic
+    external fun deleteControllerProfile(name: String): Boolean
+
     @JvmStatic
     external fun isControllerDisabled(index: Int): Boolean
 

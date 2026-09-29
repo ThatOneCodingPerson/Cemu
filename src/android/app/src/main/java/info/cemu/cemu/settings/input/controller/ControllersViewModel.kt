@@ -14,8 +14,12 @@ import info.cemu.cemu.common.android.inputdevice.toControllerInfo
 import info.cemu.cemu.common.input.InputMapper
 import info.cemu.cemu.common.input.getNativeButtonsForControllerType
 import info.cemu.cemu.nativeinterface.NativeInput
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class ButtonInfo(
     val name: String,
@@ -172,6 +176,42 @@ class ControllersViewModel(val controllerIndex: Int) : ViewModel() {
 
     fun save() {
         NativeInput.saveInputs()
+    }
+
+    private val _controllerProfiles = MutableStateFlow<List<String>>(emptyList())
+    val controllerProfiles = _controllerProfiles.asStateFlow()
+
+    fun refreshControllerProfiles() {
+        viewModelScope.launch {
+            _controllerProfiles.value = withContext(Dispatchers.IO) { NativeInput.getControllerProfiles().toList() }
+        }
+    }
+
+    fun isValidProfileName(name: String) = NativeInput.isValidControllerProfileName(name)
+
+    fun saveProfile(name: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val saved = withContext(Dispatchers.IO) { NativeInput.saveControllerProfile(controllerIndex, name) }
+            refreshControllerProfiles()
+            onResult(saved)
+        }
+    }
+
+    fun loadProfile(name: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val loaded = withContext(Dispatchers.IO) { NativeInput.loadControllerProfile(controllerIndex, name) }
+            // the profile can change the emulated controller type too
+            _controllerType.value = NativeInput.getControllerType(controllerIndex)
+            refreshControllerData()
+            onResult(loaded)
+        }
+    }
+
+    fun deleteProfile(name: String) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { NativeInput.deleteControllerProfile(name) }
+            refreshControllerProfiles()
+        }
     }
 
     init {

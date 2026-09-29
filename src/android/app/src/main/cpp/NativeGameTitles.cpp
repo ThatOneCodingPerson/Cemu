@@ -88,6 +88,30 @@ Java_info_cemu_cemu_nativeinterface_NativeGameTitles_setThreadQuantumForTitle([[
 	NativeGameTitles::g_currentGameProfile.Save(game_title_id);
 }
 
+// named controller profile the game uses for a controller (applied at game start), null for the normal configuration
+extern "C" [[maybe_unused]] JNIEXPORT jstring JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeGameTitles_getControllerProfileForTitle(JNIEnv* env, [[maybe_unused]] jclass clazz, jlong game_title_id, jint controller_index)
+{
+	NativeGameTitles::LoadGameProfile(game_title_id);
+	const auto& profiles = NativeGameTitles::g_currentGameProfile.GetControllerProfile();
+	if (controller_index < 0 || controller_index >= (jint)profiles.size() || !profiles[controller_index] || profiles[controller_index]->empty())
+		return nullptr;
+	return JNIUtils::ToJString(env, profiles[controller_index].value());
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeGameTitles_setControllerProfileForTitle(JNIEnv* env, [[maybe_unused]] jclass clazz, jlong game_title_id, jint controller_index, jstring profile)
+{
+	JNIUtils::HandleNativeException(env, [&]() {
+		NativeGameTitles::LoadGameProfile(game_title_id);
+		std::optional<std::string> profileName;
+		if (profile != nullptr)
+			profileName = JNIUtils::FromJString(env, profile);
+		NativeGameTitles::g_currentGameProfile.SetControllerProfile(controller_index, profileName);
+		NativeGameTitles::g_currentGameProfile.Save(game_title_id);
+	});
+}
+
 extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeGameTitles_isShaderMultiplicationAccuracyForTitleEnabled([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jlong game_title_id)
 {
