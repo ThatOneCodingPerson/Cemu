@@ -55,6 +55,22 @@ Status: **first pass done** (2026-09-28). Every section is filled; the `?` cells
 - For the GPU name, add a small JNI call that runs `vkGetPhysicalDeviceProperties` via the existing loader. `VulkanRenderer` already enumerates devices. The adreno model could also come from `ro.hardware.egl` / the GLES renderer string.
 - **Hazard:** GitHub API rate limit is 60 requests/hour unauthenticated. Cache responses and show a friendly error on 403.
 
+**Re-check before implementing (2026-09-28, GitHub API + downloaded zips):**
+- **Repo moved:** `whitebelyash/freedreno_turnip-CI` now answers 301 and is `whitebelyash/AdrenoToolsDrivers` (releases `tu_vNN` "Mainline Turnip", `stu_vN` "Stable Turnip"). The other four names still resolve.
+- **Formats:** one asset from each repo was downloaded (purple T30, GameHub 842.8, KIMCHI Turnip R8 + Qualcomm 840, Weab-chan Oct-11-2025, whitebelyash V32). All are zips with `meta.json` at the root and every `DriverMetadata` field present with no extra keys, so the existing installer accepts them.
+- **`minApi` varies (27–35).** KIMCHI's `Qualcomm_840_adpkg.zip` needs API 35, so the Thor (API 33) can't use it. The installer now reports this separately.
+- **Order:** the API's default order isn't by date (K11MCH1 lists v819.2 above newer rc builds), so sort by `published_at`. Some releases have no assets (purple `vTurnip_23.0.0_R2`).
+- **GitHub docs** (docs.github.com, rate-limits and getting-started pages): 60 requests/h unauthenticated. When exceeded, the response is 403 or 429 with `x-ratelimit-remaining: 0` and `x-ratelimit-reset` in epoch seconds. A `User-Agent` is required; send `Accept: application/vnd.github+json` and `X-GitHub-Api-Version: 2022-11-28`.
+
+**Implemented** e8efeb45 (`settings/customdrivers/Driver{Releases,DownloadViewModel,DownloadScreen,Installer}.kt`, JNI `getSystemGpuInfo`).
+- **GPU probe:** a separate VkInstance from the system `libvulkan.so`, never `dlclose`d.
+- **Suggestions:** keyed by Adreno model. The table follows Eden's picks (facts only, no Eden code).
+- **Caching:** results cached per process for 15 min.
+- **Not done yet:**
+  - A per-game "curated defaults" source.
+  - ETag conditional requests (GitHub's docs page doesn't say whether a 304 counts against the limit).
+  - Showing which listed release is already installed (the zip must be downloaded to read its `meta.json`).
+
 ## 2. Controller auto-mapping ("sense controller type, assume keybinds")
 **What Azahar does** (azahar-emu/azahar PR #1769, merged 2026-02-27 in 2125.0; read 2026-09-28):
 - **Trigger.** An "Auto-Map Controller" button; long-press clears all bindings.

@@ -15,7 +15,7 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 - Phases 1–6 are built and awaiting device tests (latest APK `dist/android/output/Cemu-latest-dev.apk`). Phase 7 research first pass is done.
 - **Session 2 (2026-09-28), in order:**
   1. [?] Remaining open bugs: K14, K15, K18, K25, K26 (c27e208b), A15 (aaab5241 + pad/second-screen gate), B5 (4392ec37). K24 blocked: core swkbd has no cancel result.
-  2. [~] Backlog #1, the GPU driver fetcher.
+  2. [?] Backlog #1, the GPU driver fetcher (e8efeb45).
   3. Backlog #3, hotkeys.
   4. Backlog #2, auto-map.
 - **Blocked on the owner:**
@@ -158,7 +158,14 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 - [ ] Fill the remaining `?` cells of the gap table (web search was rate-limited on 2026-09-28)
 
 ## Feature backlog (from FEATURE_RESEARCH.md; each item becomes its own phase)
-1. [ ] GPU driver fetcher (Eden-style): repo list, releases, download, install, GPU model plus recommendation
+1. [?] GPU driver fetcher (Eden-style): repo list, releases, download, install, GPU model plus recommendation (2026-09-28, e8efeb45)
+   - **Device test:** Settings > Graphics > Custom drivers > download icon.
+     - On the Thor: GPU card shows "Adreno (TM) 740", a system driver version, and "Suggested: Mr. Purple Turnip (T23)".
+     - Switch between repos. Download the T23 zip: progress bar, then "Driver installed successfully" + "Use it".
+     - Back: the driver is listed and selected. Launch a game (log.txt shows the custom driver being loaded).
+     - Download KIMCHI "Qualcomm Driver v840" on Android 13: "needs a newer Android version".
+     - Airplane mode: error card + Retry. Leaving the screen mid-download leaves no `driver-download.zip` in the cache dir.
+     - A non-Qualcomm phone has no Custom drivers entry at all (unchanged).
 2. [ ] Controller auto-map with a "press A" layout prompt; auto-apply a default profile per vendor:product
 3. [ ] More hotkeys: swap screens, toggle pad, pause, screenshot
 4. [ ] Dual-screen polish: display picker, mirror the TV, overlay on the second screen, split ratio
