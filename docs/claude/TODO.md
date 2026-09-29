@@ -180,6 +180,18 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
 - [x] Gap table, implementation notes, prioritized backlog (below)
 - [ ] Fill the remaining `?` cells of the gap table (web search was rate-limited on 2026-09-28)
 
+## Owner requests
+- [?] **Keys file import** (requested 2026-09-29; 49c662ca): Settings > "Import keys file". Picks a `keys.txt` from anywhere (Android/data is locked on newer Android) and merges its keys into Cemu's `keys.txt` (new keys only, below an "imported from" comment). The keys are reloaded and the titles rescanned, so no restart is needed.
+  - **Device test:**
+    - With a WUD/WUX in the games folder that doesn't show (missing key), import a keys.txt that has its key from Downloads: "Added N keys" and the game appears in the list without a restart. It launches.
+    - Import the same file again: "All keys of this file were already added".
+    - Pick a random text file: "No keys found".
+- [?] **otp.bin / seeprom.bin import** (same problem as keys.txt; a23cad60): Account settings > "Import otp.bin / seeprom.bin" (multi-select, recognized by size 1024/512). The online status refreshes without a restart.
+  - **Device test:**
+    - Select both files from Downloads: "otp.bin imported / seeprom.bin imported".
+    - The status line updates. The Network service choice unlocks once the certificates in the MLC are present too.
+    - A wrong file shows the size hint.
+
 ## Feature backlog (from FEATURE_RESEARCH.md; each item becomes its own phase)
 1. [?] GPU driver fetcher (Eden-style): repo list, releases, download, install, GPU model plus recommendation (2026-09-28, e8efeb45)
    - **Device test:** Settings > Graphics > Custom drivers > download icon.
@@ -224,7 +236,15 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
    - [ ] Display picker + per-display memory (only matters with 2+ candidate displays, e.g. Thor + HDMI)
    - [ ] Mirror the TV on the second screen; input overlay / performance overlay on the second screen
 5. [ ] Per-game controller profiles and overlay layouts
-6. [ ] Save backup/restore per title; single-file WUA/WUP install picker
+6. [~] Save backup/restore per title; single-file WUA/WUP install picker
+   - [?] Title manager > save entry menu > Export save (zip) / Import save (confirm, staged, rollback; marks the save mirror dirty with a custom root) (2026-09-29, 30c39093)
+     - **Device test:**
+       - Export a save and check that the zip holds `user/` and `meta/`.
+       - Play, then import the export: the old progress is back.
+       - Import a zip of the save folder itself (one level deeper): works.
+       - Import a random zip: "isn't a save backup".
+       - With a custom data root: restart after importing, and the imported save is still there (not overwritten by the sync).
+   - [ ] Single-file WUA/WUP install picker
 7. [~] Overlay frametime graph, battery and temperature; sustained-performance toggle
    - [?] Battery (level, charging "+", battery temperature) and thermal status lines in the overlay; Settings > Overlay toggles (2026-09-28, f03ccff9)
      - **Device test:** overlay position set, both toggles on:
