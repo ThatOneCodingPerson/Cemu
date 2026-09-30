@@ -29,6 +29,23 @@ That's roughly 6–8 GB. The first build also compiles all native dependencies w
 | `release` | `info.cemu.cemu` | Cemu | Signed with `ANDROID_STORE_FILE` / `ANDROID_KEY_ALIAS` / `ANDROID_KEY_STORE_PASSWORD` if set, otherwise with the debug key. |
 | `debug` | `info.cemu.cemu.debug` | Cemu debug | Unoptimized native code, so emulation is very slow. Single process. |
 
+## The regular "Cemu" app (for frontends)
+Frontends and launchers (ES-DE, Daijishō, Cocoon…) look for the app id `info.cemu.cemu` and start games through `info.cemu.cemu/.emulation.EmulationActivity`. "Cemu Dev" has a different id, so they don't see it. To build the regular app, double-click `build-cemu-apk.cmd` or run:
+
+```powershell
+.\dist\android\build-cemu-apk.ps1                                          # signed with this PC's debug key
+.\dist\android\build-cemu-apk.ps1 -Keystore D:\keys\release.jks -KeyAlias cemu   # signed with your release key
+.\dist\android\build-cemu-apk.ps1 -Version 0.6                             # version shown in the app
+```
+
+It builds the `release` type, checks that the APK's app id is `info.cemu.cemu` and prints which key signed it. The APK is `dist/android/output/Cemu-<version>-<commit>-release.apk`.
+
+**The signing key matters.** Android only installs an APK as an update of an installed Cemu when both are signed with the same key:
+- With your release keystore (the one behind your GitHub releases), it updates that Cemu and keeps its data.
+- With the debug key, it installs on a device without Cemu, and it updates other debug-key builds from the same PC (keep `%USERPROFILE%\.android\debug.keystore`). A Cemu signed with another key has to be uninstalled first, and that deletes its data in `Android/data/info.cemu.cemu` (saves, keys, shader caches) unless a custom data folder is set. Back up first.
+
+The keystore password comes from `ANDROID_KEY_STORE_PASSWORD` or is asked for; it is used for both the store and the key, like the release CI workflow does. `-Install` never uninstalls anything: with a key mismatch the install just fails.
+
 ## Collecting logs from a device
 ```powershell
 .\dist\android\pull-logs.ps1 -Clear   # before a test session

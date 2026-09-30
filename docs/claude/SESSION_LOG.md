@@ -221,3 +221,29 @@ Format: date · what was done · what's next · open questions. Keep each entry 
   - switching controller 1 when a better pad connects while built-in controls are mapped;
   - FXAA/RCAS;
   - the gap table's Azahar/PPSSPP/NetherSX2/Vita3K cells.
+
+## 2026-09-29/30, session 4 addendum (README, the regular Cemu APK, repository cleanup)
+**Owner requests:**
+1. A community-facing README (4b190378).
+2. A script that builds the regular "Cemu" app (`info.cemu.cemu`), so frontends such as Cocoon recognize it. The owner chose to build `android-stability`, signed with the debug key.
+3. "fix everything where I have all my proper code", after branches got mixed up.
+
+**What had happened:**
+- In GitHub Desktop, the owner created `NewCemu` from `android-port` and committed there.
+- Because `android-port`'s `.gitignore` doesn't exclude `dist/android/output`, that commit held only the 38 dev APKs (~1.3 GB), build logs and `.build-drive`. It had no code, and the README in it was still the old one.
+- `NewCemu` and `android-stability` were both pushed to GitHub.
+- A stash `!!GitHub_Desktop<NewCemu>` held an accidental revert of upstream's figure fix 8759323e (stash commit fb4b72be, dropped).
+- My git worktree (`Cemu-android-stability`) added to the confusion. It also broke the build: submodule `.git` files use relative paths that climb above the `subst` drive root.
+
+**Cleanup (2026-09-30):**
+- Removed the worktree and the extra `S:` mapping.
+- The main folder is back on `android-stability`.
+- The old dev APKs were restored as ignored files in `dist/android/output`.
+- The stash was dropped, and the local `NewCemu` was deleted.
+- Left for the owner: whether to delete `origin/NewCemu` and push `android-stability`.
+
+**Added:** `dist/android/build-cemu-apk.ps1`/`.cmd`. It builds the `release` type (`info.cemu.cemu`, label "Cemu"), checks the app id with aapt2, prints the signer with apksigner, and takes `-Keystore/-KeyAlias/-Version/-Install`. The release key's password is asked for, never stored.
+
+**Checked:**
+- Cocoon (cocoon-shell.com) is an Android frontend for dual-screen handhelds with a Wii U platform (read 2026-09-30).
+- Frontends start games through `info.cemu.cemu/.emulation.EmulationActivity` with an ACTION_VIEW content URI. This fork keeps that.

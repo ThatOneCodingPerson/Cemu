@@ -6,7 +6,8 @@
 - **Branches:**
   - `android-port`: mirrors upstream.
   - `android-port-dual`: released 0.5.x, which adds dual screen (pad on a second display), screen swap, and custom data storage with save sync.
-  - `android-stability`: current work, branched from `android-port-dual`. It has **no upstream**, on purpose.
+  - `android-stability`: **all current work**, branched from `android-port-dual`. The owner pushed it to GitHub (`origin/android-stability`) on 2026-09-29. Work only here.
+  - A `NewCemu` branch was created by accident on 2026-09-29: plain `android-port` plus a commit that held only build outputs (the old `.gitignore` there doesn't exclude `dist/android/output`). It had no code; it was deleted locally on 2026-09-30, and its GitHub copy was left for the owner to decide.
 - **Target devices:** AYN Thor (dual screen; usually connected over adb) and ordinary single-screen phones. Everything must work single-screen; dual screen is an added capability.
 - **Current phase:** see `docs/claude/TODO.md` (top section).
 
@@ -37,11 +38,15 @@
 - **Build:** `dist\android\build-apk.ps1 [-BuildType dev|release|debug] [-Install] [-Device <serial>] [-Clean]`, or double-click `build-apk.cmd`. Linux/WSL: `dist/android/build-apk.sh`.
   - Output goes to `dist/android/output/Cemu-<ver>-<git>-<type>.apk` plus `Cemu-latest-<type>.apk`. Logs are in `dist/android/output/logs/`.
 - **Build types:** `dev` = optimized, `info.cemu.cemu.dev`, "Cemu Dev", debug-signed, installs side by side with release. `release` = what CI ships. `debug` = unoptimized native (slow).
+- **The regular "Cemu" app** (`info.cemu.cemu`, what frontends such as Cocoon/ES-DE/Daijishō recognize): `dist\android\build-cemu-apk.ps1 [-Keystore <jks> -KeyAlias <alias>] [-Version M.m]`, or double-click `build-cemu-apk.cmd`.
+  - It builds the `release` type, checks the app id and prints the signer.
+  - Without `-Keystore` it signs with this PC's debug key. That can't update a Cemu signed with another key, and uninstalling one deletes its data. Never uninstall the owner's install; tell them.
 - **Toolchain:** everything is bootstrapped into `%LOCALAPPDATA%\Android\Sdk` and `%LOCALAPPDATA%\CemuAndroidBuild` (JDK 21).
   - Versions come from `src/android/app/build.gradle.kts`: AGP 9.1.1, Gradle 9.3.1, Kotlin 2.3.20, compileSdk 36, minSdk 30, targetSdk 35, NDK 29.0.14206865, arm64-v8a only.
   - Native deps come from vcpkg (submodule `dependencies/vcpkg`, manifest `vcpkg.json`, triplet arm64-android via `cmake/vcpkg_android.cmake`).
 - **Gotchas:**
   - The repo path has a space, so the script builds from a `subst` drive (letter saved in `dist/android/.build-drive`).
+  - Don't build from a `git worktree` through `subst`: its submodules' `.git` files hold relative paths that climb above the drive root, so vcpkg's git calls fail ("failed to git show versions/baseline.json"). Build in the main clone.
   - The first build compiles all vcpkg ports (long); later builds reuse vcpkg's binary cache.
   - `.gitattributes` forces LF for `*.sh` and `gradlew`.
 - **Tests:** `gradlew :app:testDebugUnitTest` (JVM; AGP 9 has no unit-test task for the `dev` type). This includes ArchUnit rules in `src/android/app/src/test/.../ArchitectureTests.kt`:
