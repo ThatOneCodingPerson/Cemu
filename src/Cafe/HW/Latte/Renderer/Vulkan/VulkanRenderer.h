@@ -13,6 +13,14 @@
 #include "util/containers/flat_hash_map.hpp"
 #include "util/containers/robin_hood.h"
 
+#if BOOST_PLAT_ANDROID
+namespace FrameGen
+{
+	class DeviceSetup;
+	class FrameGenerator;
+}
+#endif
+
 struct VkSupportedFormatInfo_t
 {
 	bool fmt_d24_unorm_s8_uint{};
@@ -240,6 +248,10 @@ public:
 	void Shutdown() override;
 
 	void SwapBuffers(bool swapTV = true, bool swapDRC = true) override;
+#if BOOST_PLAT_ANDROID
+	// frame generation (Lossless Scaling) is installed, works on this device and is turned on
+	bool IsFrameGenEnabled() const;
+#endif
 
 	void Flush(bool waitIdle = false) override;
 	void NotifyLatteCommandProcessorIdle() override;
@@ -446,6 +458,15 @@ private:
 	bool m_canvasHasWindow[2]{};
 	std::chrono::steady_clock::time_point m_canvasRetryTime[2]{};
 	bool m_imguiMainWindow = true; // the canvas of the current ImguiBegin/ImguiEnd, for pre-rotation
+
+	// frame generation, see PresentGeneratedFrames()
+	bool PresentGeneratedFrames();
+	void PresentGeneratedImage(SwapchainInfoVk& chainInfo);
+	std::unique_ptr<FrameGen::DeviceSetup> m_frameGenSetup; // only while the device is created
+	std::unique_ptr<FrameGen::FrameGenerator> m_frameGenerator; // null without a usable Lossless.dll
+	std::string m_frameGenUnavailableReason;
+	float m_frameGenSourceToScreen = 0.0f; // rendered width / width on screen of the last main window picture
+	bool m_frameGenWasRequested = false; // to explain once why frame generation doesn't turn on
 #else
 	std::atomic_flag m_destroyPadSwapchainNextAcquire{};
 #endif

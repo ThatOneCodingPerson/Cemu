@@ -469,6 +469,11 @@ struct CemuConfig
 	ConfigValue<bool> vk_pre_rotation{ false };
 	// 0 = as the game requests, 1-4 = at least 2x/4x/8x/16x for linearly filtered textures
 	ConfigValue<sint32> anisotropic_filter{ 0 };
+	// frame generation with the shaders of the user's Lossless.dll (VulkanRenderer::PresentGeneratedFrames)
+	ConfigValue<bool> frame_gen{ false };
+	ConfigValue<sint32> frame_gen_multiplier{ 2 }; // shown frames per rendered frame, 2-4
+	ConfigValue<sint32> frame_gen_target_rate{ 0 }; // frames per second to reach instead (generating as needed), 0 = use the multiplier
+	ConfigValue<sint32> frame_gen_flow_scale{ 0 }; // resolution of the optical flow in percent (25-100), 0 = from the game's resolution
 #endif
 
 	struct

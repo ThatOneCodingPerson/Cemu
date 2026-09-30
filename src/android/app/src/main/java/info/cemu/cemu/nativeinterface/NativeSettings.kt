@@ -92,6 +92,65 @@ object NativeSettings {
     @JvmStatic
     external fun setAnisotropicFilter(value: Int)
 
+    /**
+     * Frame generation with the shaders of the user's own Lossless Scaling ([installLosslessDll]).
+     * Also applies to a running game.
+     */
+    @JvmStatic
+    external fun isFrameGenerationEnabled(): Boolean
+
+    @JvmStatic
+    external fun setFrameGenerationEnabled(value: Boolean)
+
+    /** Shown frames per rendered frame, 2 to 4. Unused while a target rate is set. */
+    @JvmStatic
+    external fun getFrameGenerationMultiplier(): Int
+
+    @JvmStatic
+    external fun setFrameGenerationMultiplier(value: Int)
+
+    /** Frames per second to reach by generating as many frames as needed, 0 to use the multiplier. */
+    @JvmStatic
+    external fun getFrameGenerationTargetRate(): Int
+
+    @JvmStatic
+    external fun setFrameGenerationTargetRate(value: Int)
+
+    const val FRAME_GENERATION_FLOW_SCALE_AUTO: Int = 0
+
+    /**
+     * Resolution of the motion estimation in percent, 25 to 100.
+     * [FRAME_GENERATION_FLOW_SCALE_AUTO] picks it from the game's resolution.
+     */
+    @JvmStatic
+    external fun getFrameGenerationFlowScale(): Int
+
+    @JvmStatic
+    external fun setFrameGenerationFlowScale(value: Int)
+
+    /** Results of [getLosslessDllStatus] and [installLosslessDll] (FrameGen::LosslessStatus). */
+    object LosslessDllStatus {
+        const val OK: Int = 0
+        const val NOT_INSTALLED: Int = 1
+        const val UNREADABLE_FILE: Int = 2
+        const val NOT_PORTABLE_EXECUTABLE: Int = 3
+        const val MISSING_SHADERS: Int = 4
+    }
+
+    /** Reads and checks the whole file, [isLosslessDllInstalled] only looks whether it's there. */
+    @JvmStatic
+    external fun getLosslessDllStatus(): Int
+
+    @JvmStatic
+    external fun isLosslessDllInstalled(): Boolean
+
+    /** Checks the Lossless.dll at [path] and copies it into Cemu's data folder. */
+    @JvmStatic
+    external fun installLosslessDll(path: String): Int
+
+    @JvmStatic
+    external fun removeLosslessDll(): Boolean
+
     /** Ignore the gamma adjustment a game requests (GX2SetTVGamma). */
     @JvmStatic
     external fun isOverrideGameGammaEnabled(): Boolean

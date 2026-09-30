@@ -147,6 +147,11 @@ XMLConfigParser CemuConfig::Load(XMLConfigParser& parser)
 #if BOOST_PLAT_ANDROID
 	vk_pre_rotation = graphic.get("vkPreRotation", false);
 	anisotropic_filter = std::clamp(graphic.get("AnisotropicFilter", 0), 0, 4);
+	frame_gen = graphic.get("FrameGeneration", false);
+	frame_gen_multiplier = std::clamp(graphic.get("FrameGenMultiplier", 2), 2, 4);
+	frame_gen_target_rate = std::clamp(graphic.get("FrameGenTargetRate", 0), 0, 240);
+	const sint32 frameGenFlowScale = graphic.get("FrameGenFlowScale", 0);
+	frame_gen_flow_scale = frameGenFlowScale <= 0 ? 0 : std::clamp(frameGenFlowScale, 25, 100);
 #endif
 #if ENABLE_METAL
 	force_mesh_shaders = graphic.get("ForceMeshShaders", false);
@@ -394,6 +399,10 @@ XMLConfigParser CemuConfig::Save(XMLConfigParser& parser)
 #if BOOST_PLAT_ANDROID
 	graphic.set("vkPreRotation", vk_pre_rotation);
 	graphic.set("AnisotropicFilter", anisotropic_filter);
+	graphic.set("FrameGeneration", frame_gen);
+	graphic.set("FrameGenMultiplier", frame_gen_multiplier);
+	graphic.set("FrameGenTargetRate", frame_gen_target_rate);
+	graphic.set("FrameGenFlowScale", frame_gen_flow_scale);
 #endif
 
 	auto overlay_node = graphic.set("Overlay");

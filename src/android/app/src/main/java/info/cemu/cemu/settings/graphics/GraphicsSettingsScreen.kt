@@ -120,6 +120,7 @@ fun GraphicsSettingsScreen(navigateBack: () -> Unit, goToCustomDriversSettings: 
             choiceToString = { scalingFilterToString(it) },
             choices = DownscalingFilterChoices,
         )
+        FrameGenerationSettings()
         GammaSettings()
     }
 }

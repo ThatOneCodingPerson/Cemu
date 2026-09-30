@@ -2,6 +2,7 @@
 #include "audio/IAudioAPI.h"
 #include "config/CemuConfig.h"
 #include "config/NetworkSettings.h"
+#include "Cafe/HW/Latte/Renderer/Vulkan/FrameGen/LosslessDll.h"
 
 extern "C" [[maybe_unused]] JNIEXPORT jint JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeSettings_getOverlayPosition([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
@@ -325,6 +326,80 @@ extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeSettings_setAnisotropicFilter([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jint level)
 {
 	GetConfig().anisotropic_filter = std::clamp<sint32>(level, 0, 4);
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeSettings_isFrameGenerationEnabled([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	return GetConfig().frame_gen;
+}
+
+// also applies to a running game: the renderer reads it every frame
+extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeSettings_setFrameGenerationEnabled([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jboolean enabled)
+{
+	GetConfig().frame_gen = enabled;
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT jint JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeSettings_getFrameGenerationMultiplier([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	return GetConfig().frame_gen_multiplier;
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeSettings_setFrameGenerationMultiplier([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jint multiplier)
+{
+	GetConfig().frame_gen_multiplier = std::clamp<sint32>(multiplier, 2, 4);
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT jint JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeSettings_getFrameGenerationTargetRate([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	return GetConfig().frame_gen_target_rate;
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeSettings_setFrameGenerationTargetRate([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jint framesPerSecond)
+{
+	GetConfig().frame_gen_target_rate = std::clamp<sint32>(framesPerSecond, 0, 240);
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT jint JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeSettings_getFrameGenerationFlowScale([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	return GetConfig().frame_gen_flow_scale;
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeSettings_setFrameGenerationFlowScale([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jint percent)
+{
+	GetConfig().frame_gen_flow_scale = percent <= 0 ? 0 : std::clamp<sint32>(percent, 25, 100);
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT jint JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeSettings_getLosslessDllStatus([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	return static_cast<jint>(FrameGen::GetInstalledLosslessStatus());
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeSettings_isLosslessDllInstalled([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	std::error_code ec;
+	return fs::exists(FrameGen::GetLosslessDllPath(), ec);
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT jint JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeSettings_installLosslessDll(JNIEnv* env, [[maybe_unused]] jclass clazz, jstring path)
+{
+	return static_cast<jint>(FrameGen::InstallLosslessDll(_utf8ToPath(JNIUtils::FromJString(env, path))));
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeSettings_removeLosslessDll([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	return FrameGen::RemoveInstalledLosslessDll();
 }
 
 extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL

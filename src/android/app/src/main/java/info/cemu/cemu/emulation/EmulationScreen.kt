@@ -85,6 +85,7 @@ import info.cemu.cemu.emulation.inputoverlay.InputOverlaySurfaceView.InputMode.D
 import info.cemu.cemu.emulation.inputoverlay.InputOverlaySurfaceView.InputMode.EDIT_POSITION
 import info.cemu.cemu.emulation.inputoverlay.InputOverlaySurfaceView.InputMode.EDIT_SIZE
 import info.cemu.cemu.nativeinterface.NativeEmulation
+import info.cemu.cemu.nativeinterface.NativeSettings
 import info.cemu.cemu.nativeinterface.NativeShaderCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -119,6 +120,10 @@ fun EmulationScreen(
     val isInputOverlayVisible by viewModel.isInputOverlayVisible.collectAsState()
     val inputOverlaySettings by viewModel.inputOverlaySettings.collectAsState()
     val hasPerGameOverlayLayout by viewModel.hasPerGameOverlayLayout.collectAsState()
+    // null without an added Lossless.dll, the option isn't offered then
+    var isFrameGenerationEnabled by remember {
+        mutableStateOf(if (NativeSettings.isLosslessDllInstalled()) NativeSettings.isFrameGenerationEnabled() else null)
+    }
 
     // second display (dual-screen handheld like the AYN Thor, or an external monitor) for the GamePad, null if none
     val context = LocalContext.current
@@ -254,6 +259,14 @@ fun EmulationScreen(
                         onScanAmiibo = {
                             closeDrawer()
                             showAmiiboDialog = true
+                        },
+                        isFrameGenerationEnabled = isFrameGenerationEnabled,
+                        onFrameGenerationChanged = { enabled ->
+                            isFrameGenerationEnabled = enabled
+                            // the renderer picks it up with the next frame
+                            NativeSettings.setFrameGenerationEnabled(enabled)
+                            NativeSettings.saveSettings()
+                            closeDrawer()
                         },
                         updateState = {
                             viewModel.updateSideMenuState(it)
@@ -440,6 +453,8 @@ private fun EmulationSideMenuContent(
     onTogglePause: () -> Unit,
     onTakeScreenshot: () -> Unit,
     onScanAmiibo: () -> Unit,
+    isFrameGenerationEnabled: Boolean?,
+    onFrameGenerationChanged: (Boolean) -> Unit,
     updateState: (SideMenuState) -> Unit,
     onShowEmulatedUSBDevices: () -> Unit,
     onEditInputOverlay: () -> Unit,
@@ -464,6 +479,14 @@ private fun EmulationSideMenuContent(
         label = tr("Scan amiibo"),
         onClick = onScanAmiibo,
     )
+
+    if (isFrameGenerationEnabled != null) {
+        CheckboxItem(
+            label = tr("Frame generation"),
+            checked = isFrameGenerationEnabled,
+            onCheckedChange = onFrameGenerationChanged,
+        )
+    }
 
     CheckboxItem(
         label = tr("Enable motion"),

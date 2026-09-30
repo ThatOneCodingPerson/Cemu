@@ -98,10 +98,21 @@ void SwapchainInfoVk::Create()
 	if (IsRotatedQuarterTurn() && (m_actualExtent.width > m_actualExtent.height) == (m_desiredExtent.x > m_desiredExtent.y))
 		std::swap(m_actualExtent.width, m_actualExtent.height);
 	cemuLog_log(LogType::Force, "Vulkan: {} swapchain {}x{}, pre-rotation {} degrees", mainWindow ? "TV" : "GamePad", m_actualExtent.width, m_actualExtent.height, GetPreRotationQuarterTurns() * 90);
+
+	// frame generation copies the finished frame out of the image (VulkanRenderer::PresentGeneratedFrames)
+	m_frameGenRequested = mainWindow && VulkanRenderer::GetInstance()->IsFrameGenEnabled();
+	m_frameGenCapable = m_frameGenRequested && (details.capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+	if (m_frameGenRequested && !m_frameGenCapable)
+		cemuLog_log(LogType::Force, "Vulkan: frame generation can't be used, the swapchain images can't be copied");
 #endif
 
 	// use at least two swapchain images. fewer than that causes problems on some drivers
 	uint32_t image_count = std::max(2u, details.capabilities.minImageCount);
+#if BOOST_PLAT_ANDROID
+	// generated frames are queued between the rendered ones, a spare image keeps the emulation from waiting for one
+	if (m_frameGenCapable)
+		image_count = std::max(image_count + 1, 4u);
+#endif
 	if(details.capabilities.maxImageCount > 0)
 		image_count = std::min(image_count, details.capabilities.maxImageCount);
 	if(image_count < 2)
@@ -110,6 +121,10 @@ void SwapchainInfoVk::Create()
 	VkSwapchainCreateInfoKHR create_info = CreateSwapchainCreateInfo(m_surface, details, m_surfaceFormat, image_count, m_actualExtent);
 	create_info.oldSwapchain = nullptr;
 	create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+#if BOOST_PLAT_ANDROID
+	if (m_frameGenCapable)
+		create_info.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+#endif
 
 	VkResult result = vkCreateSwapchainKHR(m_logicalDevice, &create_info, nullptr, &m_swapchain);
 	if (result != VK_SUCCESS)
@@ -435,6 +450,13 @@ VkPresentModeKHR SwapchainInfoVk::ChoosePresentMode(const std::vector<VkPresentM
 			if (std::find(modes.cbegin(), modes.cend(), nonBlockingMode) != modes.cend())
 				return nonBlockingMode;
 		}
+	}
+	// the generated frames are presented right before the rendered one, FIFO shows each for a refresh. With MAILBOX
+	// most of them would be replaced before they're seen
+	if (m_frameGenCapable)
+	{
+		m_maxQueued = 1;
+		return VK_PRESENT_MODE_FIFO_KHR;
 	}
 #endif
 	const auto vsyncState = (VSync)GetConfig().vsync.GetValue();

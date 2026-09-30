@@ -6,7 +6,7 @@
 ![64-bit ARM](https://img.shields.io/badge/CPU-64--bit%20ARM-blue)
 ![Vulkan](https://img.shields.io/badge/Graphics-Vulkan-AC162C?logo=vulkan&logoColor=white)
 ![Dual screen ready](https://img.shields.io/badge/Dual%20screen-ready-8A2BE2)
-![License MPL 2.0](https://img.shields.io/badge/License-MPL%202.0-orange)
+![License GPL 3.0](https://img.shields.io/badge/License-GPL%203.0-blue)
 
 This is a community build of the **Cemu** Wii U emulator for Android. It takes the Android port and goes after everything that got in the way of just *playing*: the crashes, the fiddly setup, the "why is my controller doing nothing?" moments. Then it adds the things handheld players kept asking for.
 
@@ -24,6 +24,7 @@ This is a community build of the **Cemu** Wii U emulator for Android. It takes t
 | 🛡️ **Built to be stable** | More than **80 bugs** tracked down and fixed, from crashes on quit to buttons that got stuck. |
 | 🎮 **Controllers just work** | Connect a controller and it's mapped for you. It even remembers the layout you use with each controller model. |
 | 🎨 **Sharper picture** | AMD FSR 1 upscaling, anisotropic filtering and gamma controls, built right in. |
+| 🎞️ **Frame generation** | Bring your own Lossless Scaling, and a 30 FPS game can play back at 60 FPS or more. |
 | ⚡ **Less waiting** | Compile a game's shaders ahead of time, and no more 3-second pause every time a game starts. |
 | 🧰 **Everything in the app** | GPU driver downloads, keys import, save backups, amiibo, screenshots. No file-manager detours. |
 
@@ -68,6 +69,10 @@ We went through the app piece by piece and fixed what we found:
 - **Motion controls follow your device** when you flip it around.
 
 ### ⚡ Smoother, faster, cooler
+- **Frame generation (bring your own Lossless Scaling):**
+  - Add `Lossless.dll` from your own copy of Lossless Scaling in **Settings > Graphics**. Cemu generates extra frames between the ones the game renders, so a 30 FPS game can show 60.
+  - Pick 2x, 3x or 4x, or let it adapt up to 60, 90 or 120 FPS.
+  - Turn it on and off from the in-game menu.
 - **Compile shaders ahead of time:**
   - Long-press a game > **Shader cache** > **Compile now**.
   - It prepares the game's shaders for your GPU without starting the game, so you get less stutter once you play.
@@ -112,6 +117,7 @@ We went through the app piece by piece and fixed what we found:
 | GPU driver downloads in the app | ❌ | ✅ |
 | Compile / import / export shader caches | ❌ | ✅ |
 | AMD FSR 1, anisotropic filtering, gamma | ❌ | ✅ |
+| Frame generation (with your Lossless Scaling) | ❌ | ✅ |
 | Pause, screenshot and amiibo from the menu | ❌ | ✅ |
 | Save backup & restore | ❌ | ✅ |
 | Battery, temperature & frame-time overlay | ❌ | ✅ |
@@ -137,6 +143,7 @@ We went through the app piece by piece and fixed what we found:
 - 📱 On a phone with an Adreno GPU, try a driver from **Settings > Graphics > Custom drivers**.
 - 🖥️ On a dual-screen device, open the in-game menu and turn on **External PAD screen**.
 - 🔍 Want a sharper picture? **Settings > Graphics > Upscale filter > AMD FSR 1**.
+- 🎞️ Want smoother motion in 30 FPS games? Add your `Lossless.dll` under **Settings > Graphics > Frame generation**, then switch it on from the in-game menu.
 
 ---
 
@@ -152,8 +159,12 @@ We went through the app piece by piece and fixed what we found:
 - **[Cemu](https://github.com/cemu-project/Cemu)** by the Cemu team, the Wii U emulator this all runs on ([cemu.info](https://cemu.info)).
 - **[SSimco's Android port](https://github.com/SSimco/Cemu)**, which brought Cemu to Android.
 - **AMD FidelityFX Super Resolution 1** (MIT license) for the FSR upscaler.
+- **The [Eden](https://git.eden-emu.dev/eden-emu/eden) emulator** (GPL-3.0): our frame generation is ported from Eden's, which builds on [lsfg-vk](https://github.com/PancakeTAS/lsfg-vk).
+- **Lossless Scaling** for the frame generation shaders. They are not included: they come from your own copy.
 
-Not affiliated with Nintendo. Wii U is a trademark of Nintendo.
+Not affiliated with Nintendo. Wii U is a trademark of Nintendo. Not affiliated with Lossless Scaling.
 
 ## License
-Cemu is licensed under [Mozilla Public License 2.0](/LICENSE.txt). Exempt from this are all files in the dependencies directory for which the licenses of the original code apply as well as some individual files in the src folder, as specified in those file headers respectively.
+This app is distributed under the [GNU General Public License 3.0](/LICENSE.GPL-3.0.txt). It includes code ported from the Eden emulator (the frame generation in `src/Cafe/HW/Latte/Renderer/Vulkan/FrameGen`) that is licensed under the GPL 3.0 or later, so the app as a whole (the APK and this source) is GPL 3.0.
+
+Cemu's own source files stay under the [Mozilla Public License 2.0](/LICENSE.txt), which allows them to be part of a larger GPL work. Exempt from this are all files in the dependencies directory for which the licenses of the original code apply as well as some individual files in the src folder, as specified in those file headers respectively.

@@ -15,6 +15,8 @@
 #include "Cafe/CafeSystem.h"
 #if BOOST_PLAT_ANDROID
 #include "Common/android/PerformanceHint.h"
+#include "Cafe/HW/Latte/Renderer/Vulkan/FrameGen/FrameGenDevice.h"
+#include "Cafe/HW/Latte/Renderer/Vulkan/FrameGen/FrameGenerator.h"
 #endif
 
 #include "util/helpers/helpers.h"
@@ -604,6 +606,11 @@ VulkanRenderer::VulkanRenderer()
 
 	DetermineVendor();
 	GetDeviceFeatures();
+#if BOOST_PLAT_ANDROID
+	// the device features frame generation needs, only when Lossless.dll is installed
+	m_frameGenSetup = std::make_unique<FrameGen::DeviceSetup>();
+	m_frameGenSetup->Prepare(m_physicalDevice, apiVersion);
+#endif
 
 	// init memory manager
 	memoryManager.reset(new VKRMemoryManager(this));
@@ -706,10 +713,28 @@ VulkanRenderer::VulkanRenderer()
 		pipelineRobustnessFeature.pipelineRobustness = VK_TRUE;
 	}
 
+#if BOOST_PLAT_ANDROID
+	const VkPhysicalDeviceFeatures deviceFeaturesWithoutFrameGen = deviceFeatures;
+	void* const deviceExtensionFeaturesWithoutFrameGen = deviceExtensionFeatures;
+	m_frameGenSetup->EnableCoreFeatures(deviceFeatures);
+	deviceExtensionFeatures = m_frameGenSetup->ChainFeatures(deviceExtensionFeatures);
+#endif
+
 	std::vector<const char*> used_extensions;
 	VkDeviceCreateInfo createInfo = CreateDeviceCreateInfo(queueCreateInfos, deviceFeatures, deviceExtensionFeatures, used_extensions);
 
 	VkResult result = vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_logicalDevice);
+#if BOOST_PLAT_ANDROID
+	// never let frame generation keep games from starting
+	if (result != VK_SUCCESS && m_frameGenSetup->IsUsable())
+	{
+		cemuLog_log(LogType::Force, "Vulkan: Unable to create a logical device with the frame generation features. Error {}. Trying without them", (sint32)result);
+		m_frameGenSetup = std::make_unique<FrameGen::DeviceSetup>();
+		m_frameGenUnavailableReason = "the graphics driver refused the features it needs";
+		createInfo = CreateDeviceCreateInfo(queueCreateInfos, deviceFeaturesWithoutFrameGen, deviceExtensionFeaturesWithoutFrameGen, used_extensions);
+		result = vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_logicalDevice);
+	}
+#endif
 	if (result != VK_SUCCESS)
 	{
 		cemuLog_log(LogType::Force, "Vulkan: Unable to create a logical device. Error {}", (sint32)result);
@@ -720,6 +745,18 @@ VulkanRenderer::VulkanRenderer()
 
 	vkGetDeviceQueue(m_logicalDevice, m_indices.graphicsFamily, 0, &m_graphicsQueue);
 	vkGetDeviceQueue(m_logicalDevice, m_indices.graphicsFamily, 0, &m_presentQueue);
+
+#if BOOST_PLAT_ANDROID
+	if (m_frameGenSetup->IsUsable())
+	{
+		m_frameGenerator = std::make_unique<FrameGen::FrameGenerator>(m_logicalDevice, m_physicalDevice, memoryManager.get(), m_frameGenSetup->TakeShaderModules());
+		if (!m_frameGenerator->IsUsable())
+			m_frameGenUnavailableReason = m_frameGenerator->GetError();
+	}
+	else if (m_frameGenUnavailableReason.empty())
+		m_frameGenUnavailableReason = m_frameGenSetup->GetUnusableReason();
+	m_frameGenSetup.reset();
+#endif
 
 	vkDestroySurfaceKHR(m_instance, surface, nullptr);
 
@@ -862,6 +899,9 @@ VulkanRenderer::~VulkanRenderer()
 
 	m_padSwapchainInfo = nullptr;
 	m_mainSwapchainInfo = nullptr;
+#if BOOST_PLAT_ANDROID
+	m_frameGenerator.reset();
+#endif
 
 	// clean up resources used for surface copy
 	surfaceCopy_cleanup();
@@ -1386,6 +1426,10 @@ VkDeviceCreateInfo VulkanRenderer::CreateDeviceCreateInfo(const std::vector<VkDe
 		used_extensions.emplace_back(VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME);
 	if (m_featureControl.deviceExtensions.pipeline_robustness)
 		used_extensions.emplace_back(VK_EXT_PIPELINE_ROBUSTNESS_EXTENSION_NAME);
+#if BOOST_PLAT_ANDROID
+	if (m_frameGenSetup)
+		m_frameGenSetup->AddExtensions(used_extensions);
+#endif
 
 	VkDeviceCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -3211,6 +3255,11 @@ void VulkanRenderer::RecreateSwapchain(bool mainWindow, bool skipCreate)
 {
 	SubmitCommandBuffer();
 	WaitDeviceIdle();
+#if BOOST_PLAT_ANDROID
+	// the GPU is idle: free the frame generation passes, they are rebuilt for the new swapchain if needed
+	if (mainWindow && m_frameGenerator)
+		m_frameGenerator->ReleaseChain();
+#endif
 	auto& chainInfo = GetChainInfo(mainWindow);
 
 	Vector2i size;
@@ -3268,6 +3317,9 @@ bool VulkanRenderer::UpdateSwapchainProperties(bool mainWindow)
 #if BOOST_PLAT_ANDROID
 	if (chainInfo.surfaceWasLost || chainInfo.IsPreTransformOutdated())
 		stateChanged = true;
+	// frame generation changes the present mode and the image usage of the TV swapchain
+	if (mainWindow && chainInfo.m_frameGenRequested != IsFrameGenEnabled())
+		stateChanged = true;
 #endif
 
 	if(stateChanged)
@@ -3292,6 +3344,11 @@ void VulkanRenderer::SwapBuffer(bool mainWindow)
 {
 	if(!AcquireNextSwapchainImage(mainWindow))
 		return;
+
+#if BOOST_PLAT_ANDROID
+	if (mainWindow && !PresentGeneratedFrames())
+		return;
+#endif
 
 	auto& chainInfo = GetChainInfo(mainWindow);
 
@@ -3380,6 +3437,113 @@ void VulkanRenderer::SwapBuffer(bool mainWindow)
 
 	chainInfo.swapchainImageIndex = -1;
 }
+
+#if BOOST_PLAT_ANDROID
+bool VulkanRenderer::IsFrameGenEnabled() const
+{
+	return m_frameGenerator && m_frameGenerator->IsUsable() && GetConfig().frame_gen;
+}
+
+// Frame generation: before the finished frame in the acquired main window image, present the frames generated
+// between the previous frame and it. FIFO presentation spaces them out. The acquired image goes out with the first
+// generated frame and the finished frame is copied back into a newly acquired image, so only one image is ever held.
+// Returns false if no image is acquired anymore
+bool VulkanRenderer::PresentGeneratedFrames()
+{
+	const bool requested = GetConfig().frame_gen;
+	if (requested && !m_frameGenWasRequested && !IsFrameGenEnabled())
+	{
+		const std::string& reason = m_frameGenerator ? m_frameGenerator->GetError() : m_frameGenUnavailableReason;
+		if (reason.empty())
+			LatteOverlay_pushNotification(_tr("Frame generation needs Lossless.dll. Add it in Settings > Graphics"), 10000);
+		else
+			LatteOverlay_pushNotification(_tr("Frame generation is not available: {}", reason), 10000);
+	}
+	m_frameGenWasRequested = requested;
+
+	SwapchainInfoVk* chainInfo = &GetChainInfo(true);
+	if (!IsFrameGenEnabled() || !chainInfo->m_frameGenCapable)
+		return true;
+	if (!chainInfo->hasDefinedSwapchainImage)
+	{
+		m_frameGenerator->SkipFrame();
+		return true;
+	}
+
+	draw_endRenderPass();
+	const auto& config = GetConfig();
+	FrameGen::FrameGenSettings settings;
+	settings.multiplier = config.frame_gen_multiplier;
+	settings.targetRate = config.frame_gen_target_rate;
+	settings.flowScalePercent = config.frame_gen_flow_scale;
+	const VkExtent2D extent = chainInfo->getExtent();
+	const size_t generatedCount = m_frameGenerator->CaptureFrame(m_state.currentCommandBuffer, chainInfo->m_swapchainImages[chainInfo->swapchainImageIndex],
+		chainInfo->m_surfaceFormat.format, extent, settings, m_frameGenSourceToScreen);
+	if (!m_frameGenerator->IsUsable())
+	{
+		LatteOverlay_pushNotification(_tr("Frame generation stopped: {}", m_frameGenerator->GetError()), 10000);
+		return true;
+	}
+	if (generatedCount == 0)
+		return true;
+
+	// a new swapchain (resized, rotated, frame generation turned off) doesn't fit the captured frames anymore
+	auto swapchainStillFits = [&]() {
+		chainInfo = &GetChainInfo(true);
+		return chainInfo->m_frameGenCapable && m_frameGenerator->HasChain() && chainInfo->getExtent().width == extent.width && chainInfo->getExtent().height == extent.height;
+	};
+	for (size_t generation = 0; generation < generatedCount; generation++)
+	{
+		if (generation > 0)
+		{
+			if (!AcquireNextSwapchainImage(true))
+				return false;
+			if (!swapchainStillFits())
+				return true; // SwapBuffer clears the image
+		}
+		m_frameGenerator->GenerateFrame(m_state.currentCommandBuffer, generation, chainInfo->m_swapchainImages[chainInfo->swapchainImageIndex]);
+		chainInfo->hasDefinedSwapchainImage = true;
+		PresentGeneratedImage(*chainInfo);
+	}
+
+	if (!AcquireNextSwapchainImage(true))
+		return false;
+	if (swapchainStillFits())
+	{
+		m_frameGenerator->RestoreCapturedFrame(m_state.currentCommandBuffer, chainInfo->m_swapchainImages[chainInfo->swapchainImageIndex]);
+		chainInfo->hasDefinedSwapchainImage = true;
+	}
+	return true;
+}
+
+// like the end of SwapBuffer, without its frame pacing: no wait for the previous frame, no present id
+void VulkanRenderer::PresentGeneratedImage(SwapchainInfoVk& chainInfo)
+{
+	VkSemaphore presentSemaphore = chainInfo.m_presentSemaphores[chainInfo.swapchainImageIndex];
+	SubmitCommandBuffer(presentSemaphore);
+	chainInfo.WaitAvailableFence();
+
+	VkPresentInfoKHR presentInfo = {};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = &chainInfo.m_swapchain;
+	presentInfo.pImageIndices = &chainInfo.swapchainImageIndex;
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = &presentSemaphore;
+	VkResult result = vkQueuePresentKHR(m_presentQueue, &presentInfo);
+	if (result < 0 && result != VK_ERROR_OUT_OF_DATE_KHR && result != VK_ERROR_SURFACE_LOST_KHR)
+		throw std::runtime_error(fmt::format("Failed to present image: {}", result));
+	if (result == VK_ERROR_OUT_OF_DATE_KHR)
+		chainInfo.m_shouldRecreate = true;
+	if (result == VK_ERROR_SURFACE_LOST_KHR)
+		chainInfo.surfaceWasLost = true;
+	if (result == VK_SUBOPTIMAL_KHR)
+		chainInfo.m_preTransformMayBeOutdated = true;
+
+	chainInfo.hasDefinedSwapchainImage = false;
+	chainInfo.swapchainImageIndex = -1;
+}
+#endif
 
 void VulkanRenderer::Flush(bool waitIdle)
 {
@@ -3510,6 +3674,11 @@ void VulkanRenderer::DrawBackbufferQuad(LatteTextureView* texView, RendererOutpu
 	auto& chainInfo = GetChainInfo(!padView);
 	LatteTextureViewVk* texViewVk = (LatteTextureViewVk*)texView;
 	draw_endRenderPass();
+#if BOOST_PLAT_ANDROID
+	// picks the resolution of the frame generation's optical flow
+	if (!padView && imageWidth > 0)
+		m_frameGenSourceToScreen = (float)texView->baseTexture->width / (float)imageWidth;
+#endif
 
 	// barrier for input texture
 	VkMemoryBarrier memoryBarrier{};

@@ -609,6 +609,21 @@ if(ANDROID)
   target_sources(CemuCafe PRIVATE
     Filesystem/fscDeviceAndroidSAF.cpp
     Filesystem/fscDeviceAndroidSAF.h
+    # frame generation, ported from the Eden emulator (GPL-3.0-or-later)
+    HW/Latte/Renderer/Vulkan/FrameGen/FrameGenDevice.cpp
+    HW/Latte/Renderer/Vulkan/FrameGen/FrameGenDevice.h
+    HW/Latte/Renderer/Vulkan/FrameGen/FrameGenerator.cpp
+    HW/Latte/Renderer/Vulkan/FrameGen/FrameGenerator.h
+    HW/Latte/Renderer/Vulkan/FrameGen/FrameGenPacer.cpp
+    HW/Latte/Renderer/Vulkan/FrameGen/FrameGenPacer.h
+    HW/Latte/Renderer/Vulkan/FrameGen/LosslessDll.cpp
+    HW/Latte/Renderer/Vulkan/FrameGen/LosslessDll.h
+    HW/Latte/Renderer/Vulkan/FrameGen/LsfgChain.cpp
+    HW/Latte/Renderer/Vulkan/FrameGen/LsfgChain.h
+    HW/Latte/Renderer/Vulkan/FrameGen/LsfgCommon.cpp
+    HW/Latte/Renderer/Vulkan/FrameGen/LsfgCommon.h
+    HW/Latte/Renderer/Vulkan/FrameGen/LsfgPasses.cpp
+    HW/Latte/Renderer/Vulkan/FrameGen/LsfgPasses.h
   )
   if(CMAKE_SYSTEM_PROCESSOR MATCHES "(aarch64)|(AARCH64)")
     target_link_libraries(CemuCafe PRIVATE adrenotools)

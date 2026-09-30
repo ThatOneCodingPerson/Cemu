@@ -101,6 +101,10 @@ struct SwapchainInfoVk
 
 #if BOOST_PLAT_ANDROID
 	bool surfaceWasLost = false;
+	// frame generation was turned on when the swapchain was created (TV only)
+	bool m_frameGenRequested = false;
+	// and the images can be copied from (the generated frames are copied in), presentation is FIFO
+	bool m_frameGenCapable = false;
 #endif
 
 	bool m_shouldRecreate = false;
