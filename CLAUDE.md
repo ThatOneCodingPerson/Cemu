@@ -2,12 +2,16 @@
 
 ## What this is
 - Cemu (Wii U emulator, C++20) with an **Android port** (Kotlin/Compose UI + JNI + Vulkan). This is the owner's fork.
-- **Remotes:** `origin` = github.com/SapphireRhodonite/Cemu (the fork), `upstream` = github.com/SSimco/Cemu (the original Android port). The desktop project is cemu-project/Cemu.
+- **Remotes** (as of 2026-09-30):
+  - `origin` = github.com/ThatOneCodingPerson/Cemu, the owner's current fork, where `android-stability` is pushed.
+  - `upstream` = github.com/SapphireRhodonite/Cemu, the owner's earlier fork with the released `android-port-dual`.
+  - The original Android port is github.com/SSimco/Cemu, and the desktop project is cemu-project/Cemu.
+  - `origin`'s default branch on GitHub is still `android-port`.
 - **Branches:**
   - `android-port`: mirrors upstream.
   - `android-port-dual`: released 0.5.x, which adds dual screen (pad on a second display), screen swap, and custom data storage with save sync.
   - `android-stability`: **all current work**, branched from `android-port-dual`. The owner pushed it to GitHub (`origin/android-stability`) on 2026-09-29. Work only here.
-  - A `NewCemu` branch was created by accident on 2026-09-29: plain `android-port` plus a commit that held only build outputs (the old `.gitignore` there doesn't exclude `dist/android/output`). It had no code; it was deleted locally on 2026-09-30, and its GitHub copy was left for the owner to decide.
+  - A `NewCemu` branch was created by accident on 2026-09-29: plain `android-port` plus a commit that held only build outputs (the old `.gitignore` there doesn't exclude `dist/android/output`). It had no code. It was deleted locally and on GitHub on 2026-09-30, at the owner's request.
 - **Target devices:** AYN Thor (dual screen; usually connected over adb) and ordinary single-screen phones. Everything must work single-screen; dual screen is an added capability.
 - **Current phase:** see `docs/claude/TODO.md` (top section).
 

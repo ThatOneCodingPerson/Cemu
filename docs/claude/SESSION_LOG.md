@@ -240,7 +240,8 @@ Format: date · what was done · what's next · open questions. Keep each entry 
 - The main folder is back on `android-stability`.
 - The old dev APKs were restored as ignored files in `dist/android/output`.
 - The stash was dropped, and the local `NewCemu` was deleted.
-- Left for the owner: whether to delete `origin/NewCemu` and push `android-stability`.
+- With the owner's OK, pushed `android-stability` (5cef0e77) and deleted `NewCemu` on GitHub.
+- Found on the way: the remotes had changed. `origin` = ThatOneCodingPerson/Cemu, `upstream` = SapphireRhodonite/Cemu; CLAUDE.md is updated.
 
 **Added:** `dist/android/build-cemu-apk.ps1`/`.cmd`. It builds the `release` type (`info.cemu.cemu`, label "Cemu"), checks the app id with aapt2, prints the signer with apksigner, and takes `-Keystore/-KeyAlias/-Version/-Install`. The release key's password is asked for, never stored.
 
