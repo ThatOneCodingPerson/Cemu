@@ -56,6 +56,7 @@ fun GraphicsSettingsScreen(navigateBack: () -> Unit, goToCustomDriversSettings: 
         if (supportsLoadingCustomDrivers) {
             Button(
                 label = tr("Custom drivers"),
+                description = tr("The system driver works for almost every Wii U game. Set a different driver only for a game that needs one, in its game profile."),
                 onClick = goToCustomDriversSettings
             )
         }

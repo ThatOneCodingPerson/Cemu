@@ -15,7 +15,8 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * GitHub repos publishing adrenotools driver zips (meta.json + library at the zip root). The list follows the repos
- * other Android emulators offer (see docs/claude/FEATURE_RESEARCH.md §1). Checked 2026-09-28.
+ * other Android emulators offer (see docs/claude/FEATURE_RESEARCH.md §1), plus ones the owner asked for. Checked
+ * 2026-09-28, Balemuni Apex 2026-09-30.
  */
 /** [description] is untranslated, pass it to tr(). */
 enum class DriverRepository(val displayName: String, val repo: String, val description: String) {
@@ -43,6 +44,13 @@ enum class DriverRepository(val displayName: String, val repo: String, val descr
         "Whitebelyash Turnip",
         "whitebelyash/AdrenoToolsDrivers", // formerly whitebelyash/freedreno_turnip-CI
         trNoop("Mainline and Adreno 8xx Turnip builds"),
+    ),
+    // owner request 2026-09-30. "Apex Edition" releases: a Universal zip for all Adreno GPUs and an Ultimate zip tuned
+    // for Snapdragon 8 Gen 2 (the AYN Thor's chip); minApi 33 (Android 13+). Checked 2026-09-30
+    BalemuniApex(
+        "Balemuni Apex",
+        "Balemuni/Balemunis-Aurora",
+        trNoop("Turnip tuned for emulators: Universal for all Adreno GPUs, Ultimate for Snapdragon 8 Gen 2 (Android 13+)"),
     ),
 }
 

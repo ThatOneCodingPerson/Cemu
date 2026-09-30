@@ -66,14 +66,15 @@ fun DriverDownloadScreen(
                 snackbarHostState.showSnackbar(driverInstallStatusMessage(result.status))
                 return@launch
             }
+            // a downloaded driver is best picked per game (game profile); the action makes it the driver of every game
             val snackbarResult = snackbarHostState.showSnackbar(
-                message = driverInstallStatusMessage(result.status),
-                actionLabel = tr("Use it"),
+                message = tr("{0}. Pick it for a game in its game profile, or use it for all games.", driverInstallStatusMessage(result.status)),
+                actionLabel = tr("Use for all games"),
                 duration = SnackbarDuration.Long,
             )
             if (snackbarResult == SnackbarResult.ActionPerformed) {
                 viewModel.selectDriver(driverPath)
-                snackbarHostState.showSnackbar(tr("Driver selected, it is used the next time a game starts"))
+                snackbarHostState.showSnackbar(tr("Driver selected for all games, it is used the next time a game starts"))
             }
         }
     }
@@ -83,6 +84,9 @@ fun DriverDownloadScreen(
         appBarText = tr("Download drivers"),
         navigateBack = navigateBack,
     ) {
+        item {
+            DefaultDriverNote()
+        }
         item {
             GpuInfoCard(gpuInfo, suggestion)
         }
@@ -160,7 +164,7 @@ private fun GpuInfoCard(gpuInfo: SystemGpuInfo?, suggestion: DriverSuggestion?) 
             }
             Text(text = suggestionText, fontWeight = FontWeight.Medium)
             Text(
-                text = tr("Suggestions come from other emulators and are a starting point. If games already run well with the system driver, keep using it."),
+                text = tr("Suggestions come from other emulators and are a starting point for games that have problems with the system driver."),
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

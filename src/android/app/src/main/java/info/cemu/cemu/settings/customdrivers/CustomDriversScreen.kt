@@ -14,10 +14,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -96,6 +99,9 @@ fun CustomDriversScreen(
         },
     ) {
         item {
+            DefaultDriverNote()
+        }
+        item {
             SystemDriverListItem(
                 selected = isSystemDriverSelected,
                 onSelect = customDriversViewModel::setSystemDriverSelected
@@ -105,7 +111,18 @@ fun CustomDriversScreen(
             CustomDriverListItem(
                 driver = it,
                 onDelete = { customDriversViewModel.deleteDriver(it) },
-                onSelect = { customDriversViewModel.setDriverSelected(it) }
+                onSelect = {
+                    if (it.selected) return@CustomDriverListItem
+                    customDriversViewModel.setDriverSelected(it)
+                    // the choice here applies to every game; point to the per-game setting
+                    coroutineScope.launch {
+                        snackbarHostState.currentSnackbarData?.dismiss()
+                        snackbarHostState.showSnackbar(
+                            message = tr("This driver is now used for every game. To use it for one game only, choose it in that game's profile instead."),
+                            duration = SnackbarDuration.Long,
+                        )
+                    }
+                }
             )
         }
     }
@@ -139,10 +156,36 @@ private fun DriverInstallProgressDialog() {
     )
 }
 
+/** The system driver runs almost every game; a different driver is best chosen per game. */
+@Composable
+fun DefaultDriverNote(modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = tr("The system driver works for almost every Wii U game"),
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = tr("Keep it as the default here. If one game has problems, give only that game another driver: long-press the game, then Edit game profile > Custom driver. Your other games keep the driver that works for them."),
+                fontSize = 14.sp,
+            )
+        }
+    }
+}
+
 @Composable
 private fun SystemDriverListItem(selected: Boolean, onSelect: () -> Unit) {
     DriverListItem(
-        driverLabel = tr("System driver"),
+        driverLabel = tr("System driver (default, recommended)"),
         selected = selected,
         onSelect = onSelect
     )
