@@ -75,17 +75,23 @@ fun FrameGenerationSettings() {
             label = tr("Remove Lossless.dll"),
             enabled = !isImporting,
             onClick = {
-                NativeSettings.removeLosslessDll()
                 NativeSettings.setFrameGenerationEnabled(false)
                 isEnabled = false
                 importResult = null
-                dllStatus = LosslessDllStatus.NOT_INSTALLED
+                isImporting = true
+                scope.launch {
+                    dllStatus = withContext(Dispatchers.IO) {
+                        NativeSettings.removeLosslessDll()
+                        NativeSettings.getLosslessDllStatus()
+                    }
+                    isImporting = false
+                }
             },
         )
     }
     Toggle(
         label = tr("Frame generation"),
-        description = tr("Shows generated frames between the ones the game renders, so motion looks smoother. Adds a little input delay, and fast motion can show artifacts. VSync is on while it runs. Can also be switched in game, from the menu."),
+        description = tr("Shows generated frames between the ones the game renders, so motion looks smoother. Adds a little input delay, and fast motion can show artifacts. VSync is on while it runs. The in-game menu can switch it for the game you are playing."),
         checked = isEnabled && isInstalled,
         enabled = isInstalled,
         onCheckedChanged = {

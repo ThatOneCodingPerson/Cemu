@@ -70,6 +70,14 @@ void LatteOverlay_setDeviceStatus(sint32 batteryPercent, bool isCharging, sint32
 	s_deviceStatus.thermalStatus = thermalStatus;
 }
 
+// written and read on the GPU thread
+static double s_frameGenShownFps = 0.0;
+
+void LatteOverlay_setFrameGenShownFps(double fps)
+{
+	s_frameGenShownFps = fps;
+}
+
 // frame times in ms, written and read on the GPU thread only
 constexpr size_t kFrameTimeSampleCount = 120;
 struct
@@ -165,6 +173,10 @@ void LatteOverlay_renderOverlay(ImVec2& position, ImVec2& pivot, sint32 directio
 		{
 			if (config.overlay.fps)
 				ImGui::Text("FPS: %.2lf", g_state.fps);
+#if BOOST_PLAT_ANDROID
+			if (config.overlay.fps && s_frameGenShownFps > 0.0)
+				ImGui::Text("Shown: %.0lf FPS (frame generation)", s_frameGenShownFps);
+#endif
 
 			if (config.overlay.drawcalls)
 				ImGui::Text("Draws/f: %d (fast: %d)", g_state.draw_calls_per_frame, g_state.fast_draw_calls_per_frame);

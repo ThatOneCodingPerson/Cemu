@@ -311,8 +311,14 @@ namespace FrameGen
 				return SetUnusable(fmt::format("format {} can't be used as a storage image", (sint32)format));
 		}
 
+		// Android implements it in its swapchain: SurfaceFlinger holds a frame until its desired present time
+		m_displayTiming = hasExtension(VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME);
+		if (m_displayTiming)
+			addExtension(VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME);
+
 		m_usable = true;
-		cemuLog_log(LogType::Force, "Frame generation: Lossless.dll loaded, {} shaders, SPIR-V {}.{}", m_modules.size(), (requirements.spirvVersion >> 16) & 0xFF, (requirements.spirvVersion >> 8) & 0xFF);
+		cemuLog_log(LogType::Force, "Frame generation: Lossless.dll loaded, {} shaders, SPIR-V {}.{}, display timing {}", m_modules.size(), (requirements.spirvVersion >> 16) & 0xFF,
+			(requirements.spirvVersion >> 8) & 0xFF, m_displayTiming ? "supported" : "not supported");
 	}
 
 	void* DeviceSetup::ChainFeatures(void* next)

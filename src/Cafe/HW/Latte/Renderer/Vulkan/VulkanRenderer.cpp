@@ -752,6 +752,7 @@ VulkanRenderer::VulkanRenderer()
 		m_frameGenerator = std::make_unique<FrameGen::FrameGenerator>(m_logicalDevice, m_physicalDevice, memoryManager.get(), m_frameGenSetup->TakeShaderModules());
 		if (!m_frameGenerator->IsUsable())
 			m_frameGenUnavailableReason = m_frameGenerator->GetError();
+		m_frameGenDisplayTiming = m_frameGenSetup->HasDisplayTiming();
 	}
 	else if (m_frameGenUnavailableReason.empty())
 		m_frameGenUnavailableReason = m_frameGenSetup->GetUnusableReason();
@@ -3401,6 +3402,19 @@ void VulkanRenderer::SwapBuffer(bool mainWindow)
 		}
 	}
 
+#if BOOST_PLAT_ANDROID
+	// frame generation: the time of the rendered frame after the generated ones (PresentGeneratedFrames)
+	VkPresentTimeGOOGLE presentTime{};
+	VkPresentTimesInfoGOOGLE presentTimes{VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE};
+	if (mainWindow && FrameGenPresentTime(std::exchange(m_frameGenRealFrameDesiredTime, kFrameGenAutoPresentTime), presentTime))
+	{
+		presentTimes.pNext = presentInfo.pNext;
+		presentTimes.swapchainCount = 1;
+		presentTimes.pTimes = &presentTime;
+		presentInfo.pNext = &presentTimes;
+	}
+#endif
+
 	VkResult result = vkQueuePresentKHR(m_presentQueue, &presentInfo);
 	if (result < 0 && result != VK_ERROR_OUT_OF_DATE_KHR
 #if BOOST_PLAT_ANDROID
@@ -3450,6 +3464,7 @@ bool VulkanRenderer::IsFrameGenEnabled() const
 // Returns false if no image is acquired anymore
 bool VulkanRenderer::PresentGeneratedFrames()
 {
+	m_frameGenRealFrameDesiredTime = kFrameGenAutoPresentTime;
 	const bool requested = GetConfig().frame_gen;
 	if (requested && !m_frameGenWasRequested && !IsFrameGenEnabled())
 	{
@@ -3463,7 +3478,10 @@ bool VulkanRenderer::PresentGeneratedFrames()
 
 	SwapchainInfoVk* chainInfo = &GetChainInfo(true);
 	if (!IsFrameGenEnabled() || !chainInfo->m_frameGenCapable)
+	{
+		CountFrameGenShownFrames(0);
 		return true;
+	}
 	if (!chainInfo->hasDefinedSwapchainImage)
 	{
 		m_frameGenerator->SkipFrame();
@@ -3482,10 +3500,21 @@ bool VulkanRenderer::PresentGeneratedFrames()
 	if (!m_frameGenerator->IsUsable())
 	{
 		LatteOverlay_pushNotification(_tr("Frame generation stopped: {}", m_frameGenerator->GetError()), 10000);
+		CountFrameGenShownFrames(0);
 		return true;
 	}
+	CountFrameGenShownFrames((uint32)generatedCount + 1);
 	if (generatedCount == 0)
 		return true;
+
+	// FIFO alone shows each generated frame for one refresh. On a screen faster than the output (2x of 30 FPS on
+	// 120 Hz) that's uneven, so with display timing the frames get times spread over the game's frame time
+	const float frameInterval = m_frameGenDisplayTiming ? m_frameGenerator->GetFrameInterval() : 0.0f;
+	const uint64 spacingNs = (uint64)((double)frameInterval * 1e9 / (double)(generatedCount + 1));
+	const uint64 startNs = (uint64)std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+	auto desiredPresentTime = [&](size_t index) -> uint64 {
+		return (spacingNs == 0 || index == 0) ? kFrameGenAutoPresentTime : startNs + spacingNs * index;
+	};
 
 	// a new swapchain (resized, rotated, frame generation turned off) doesn't fit the captured frames anymore
 	auto swapchainStillFits = [&]() {
@@ -3503,8 +3532,9 @@ bool VulkanRenderer::PresentGeneratedFrames()
 		}
 		m_frameGenerator->GenerateFrame(m_state.currentCommandBuffer, generation, chainInfo->m_swapchainImages[chainInfo->swapchainImageIndex]);
 		chainInfo->hasDefinedSwapchainImage = true;
-		PresentGeneratedImage(*chainInfo);
+		PresentGeneratedImage(*chainInfo, desiredPresentTime(generation));
 	}
+	m_frameGenRealFrameDesiredTime = desiredPresentTime(generatedCount);
 
 	if (!AcquireNextSwapchainImage(true))
 		return false;
@@ -3516,8 +3546,49 @@ bool VulkanRenderer::PresentGeneratedFrames()
 	return true;
 }
 
-// like the end of SwapBuffer, without its frame pacing: no wait for the previous frame, no present id
-void VulkanRenderer::PresentGeneratedImage(SwapchainInfoVk& chainInfo)
+// fills `time` and returns true if a main window present needs one: a time from frame generation's pacing, or the
+// switch back to automatic timestamps after one
+bool VulkanRenderer::FrameGenPresentTime(uint64 desiredPresentTime, VkPresentTimeGOOGLE& time)
+{
+	if (!m_frameGenDisplayTiming || (desiredPresentTime == kFrameGenAutoPresentTime && !m_frameGenTimestampSet))
+		return false;
+	time.presentID = ++m_frameGenPresentId;
+	time.desiredPresentTime = desiredPresentTime;
+	m_frameGenTimestampSet = desiredPresentTime != kFrameGenAutoPresentTime;
+	return true;
+}
+
+// frames shown per second for the FPS overlay, 0 frames: frame generation is off
+void VulkanRenderer::CountFrameGenShownFrames(uint32 frames)
+{
+	const auto now = std::chrono::steady_clock::now();
+	if (frames == 0)
+	{
+		if (m_frameGenShownSince != std::chrono::steady_clock::time_point{})
+			LatteOverlay_setFrameGenShownFps(0.0);
+		m_frameGenShownSince = {};
+		return;
+	}
+	if (m_frameGenShownSince == std::chrono::steady_clock::time_point{})
+	{
+		LatteOverlay_pushNotification(_tr("Frame generation on"), 3000);
+		m_frameGenShownSince = now;
+		m_frameGenShownFrames = 0;
+		return;
+	}
+	m_frameGenShownFrames += frames;
+	const double seconds = std::chrono::duration<double>(now - m_frameGenShownSince).count();
+	if (seconds >= 1.0)
+	{
+		LatteOverlay_setFrameGenShownFps(m_frameGenShownFrames / seconds);
+		m_frameGenShownFrames = 0;
+		m_frameGenShownSince = now;
+	}
+}
+
+// like the end of SwapBuffer, without its frame pacing: no wait for the previous frame, no present id.
+// desiredPresentTime: CLOCK_MONOTONIC ns, 0 for right away
+void VulkanRenderer::PresentGeneratedImage(SwapchainInfoVk& chainInfo, uint64 desiredPresentTime)
 {
 	VkSemaphore presentSemaphore = chainInfo.m_presentSemaphores[chainInfo.swapchainImageIndex];
 	SubmitCommandBuffer(presentSemaphore);
@@ -3530,6 +3601,14 @@ void VulkanRenderer::PresentGeneratedImage(SwapchainInfoVk& chainInfo)
 	presentInfo.pImageIndices = &chainInfo.swapchainImageIndex;
 	presentInfo.waitSemaphoreCount = 1;
 	presentInfo.pWaitSemaphores = &presentSemaphore;
+	VkPresentTimeGOOGLE presentTime{};
+	VkPresentTimesInfoGOOGLE presentTimes{VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE};
+	if (FrameGenPresentTime(desiredPresentTime, presentTime))
+	{
+		presentTimes.swapchainCount = 1;
+		presentTimes.pTimes = &presentTime;
+		presentInfo.pNext = &presentTimes;
+	}
 	VkResult result = vkQueuePresentKHR(m_presentQueue, &presentInfo);
 	if (result < 0 && result != VK_ERROR_OUT_OF_DATE_KHR && result != VK_ERROR_SURFACE_LOST_KHR)
 		throw std::runtime_error(fmt::format("Failed to present image: {}", result));

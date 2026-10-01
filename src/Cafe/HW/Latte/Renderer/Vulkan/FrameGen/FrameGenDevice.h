@@ -17,6 +17,8 @@ namespace FrameGen
 		bool IsUsable() const { return m_usable; }
 		// empty when Lossless.dll isn't installed
 		const std::string& GetUnusableReason() const { return m_unusableReason; }
+		// VK_GOOGLE_display_timing is enabled: presents can be given a time (even spacing on fast screens)
+		bool HasDisplayTiming() const { return m_usable && m_displayTiming; }
 
 		// links the feature structs to enable in front of `next`, for VkDeviceCreateInfo::pNext
 		void* ChainFeatures(void* next);
@@ -30,6 +32,7 @@ namespace FrameGen
 		void SetUnusable(std::string reason);
 
 		bool m_usable = false;
+		bool m_displayTiming = false;
 		std::string m_unusableReason;
 		ShaderModules m_modules;
 		std::vector<const char*> m_extensions;

@@ -11,4 +11,6 @@ void LatteOverlay_pushNotification(const std::string& text, sint32 duration);
 void LatteOverlay_setDeviceStatus(sint32 batteryPercent, bool isCharging, sint32 batteryTemperatureTenths, sint32 thermalStatus);
 // once per emulated frame, on the GPU thread (for the frame time graph)
 void LatteOverlay_recordFrameTime();
+// frames shown per second with frame generation, generated ones included. 0 while it's off. GPU thread
+void LatteOverlay_setFrameGenShownFps(double fps);
 #endif

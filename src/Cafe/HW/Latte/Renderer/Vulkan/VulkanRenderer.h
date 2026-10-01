@@ -461,7 +461,19 @@ private:
 
 	// frame generation, see PresentGeneratedFrames()
 	bool PresentGeneratedFrames();
-	void PresentGeneratedImage(SwapchainInfoVk& chainInfo);
+	void PresentGeneratedImage(SwapchainInfoVk& chainInfo, uint64 desiredPresentTime);
+	void CountFrameGenShownFrames(uint32 frames);
+	// Android's swapchain hands VkPresentTimeGOOGLE::desiredPresentTime to native_window_set_buffers_timestamp as an
+	// int64, so this is NATIVE_WINDOW_TIMESTAMP_AUTO (INT64_MIN): back to automatic timestamps. 0 isn't, the Surface
+	// would keep the last time for every later frame
+	static constexpr uint64 kFrameGenAutoPresentTime = 1ull << 63;
+	bool FrameGenPresentTime(uint64 desiredPresentTime, VkPresentTimeGOOGLE& time);
+	bool m_frameGenDisplayTiming = false; // VK_GOOGLE_display_timing is enabled
+	bool m_frameGenTimestampSet = false; // the main window's Surface has a time from frame generation
+	uint64 m_frameGenRealFrameDesiredTime = kFrameGenAutoPresentTime; // CLOCK_MONOTONIC ns, for the rendered frame after generated ones
+	uint32 m_frameGenPresentId = 0;
+	uint32 m_frameGenShownFrames = 0;
+	std::chrono::steady_clock::time_point m_frameGenShownSince{}; // empty while frame generation is off
 	std::unique_ptr<FrameGen::DeviceSetup> m_frameGenSetup; // only while the device is created
 	std::unique_ptr<FrameGen::FrameGenerator> m_frameGenerator; // null without a usable Lossless.dll
 	std::string m_frameGenUnavailableReason;

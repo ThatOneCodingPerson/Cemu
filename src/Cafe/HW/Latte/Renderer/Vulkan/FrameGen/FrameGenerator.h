@@ -33,6 +33,8 @@ namespace FrameGen
 		const std::string& GetError() const { return m_error; }
 		// false after ReleaseChain(), until the next CaptureFrame()
 		bool HasChain() const { return m_chain != nullptr; }
+		// seconds between rendered frames, 0 while unknown
+		float GetFrameInterval() const { return m_pacer.SmoothedInterval(); }
 
 		// frameImage: the finished frame, an acquired swapchain image in VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
 		// sourceToScreen: the game's rendered width divided by its width on screen, for the automatic flow scale.

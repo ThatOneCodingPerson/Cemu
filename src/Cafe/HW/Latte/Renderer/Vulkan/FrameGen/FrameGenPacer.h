@@ -25,6 +25,9 @@ namespace FrameGen
 		FrameGenPlan Plan(size_t capacity, size_t fixedGenerations, size_t maxGenerations, float targetRate);
 		void Reset();
 
+		// seconds between rendered frames, smoothed. 0 while unknown (start, after a stall)
+		float SmoothedInterval() const { return m_smoothedInterval; }
+
 	private:
 		using Clock = std::chrono::steady_clock;
 

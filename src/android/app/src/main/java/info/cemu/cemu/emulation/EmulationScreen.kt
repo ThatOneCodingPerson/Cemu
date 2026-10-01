@@ -121,8 +121,11 @@ fun EmulationScreen(
     val inputOverlaySettings by viewModel.inputOverlaySettings.collectAsState()
     val hasPerGameOverlayLayout by viewModel.hasPerGameOverlayLayout.collectAsState()
     // null without an added Lossless.dll, the option isn't offered then
-    var isFrameGenerationEnabled by remember {
-        mutableStateOf(if (NativeSettings.isLosslessDllInstalled()) NativeSettings.isFrameGenerationEnabled() else null)
+    var isFrameGenerationEnabled by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(Unit) {
+        if (withContext(Dispatchers.IO) { NativeSettings.isLosslessDllInstalled() }) {
+            isFrameGenerationEnabled = NativeSettings.isFrameGenerationEnabled()
+        }
     }
 
     // second display (dual-screen handheld like the AYN Thor, or an external monitor) for the GamePad, null if none
@@ -263,9 +266,9 @@ fun EmulationScreen(
                         isFrameGenerationEnabled = isFrameGenerationEnabled,
                         onFrameGenerationChanged = { enabled ->
                             isFrameGenerationEnabled = enabled
-                            // the renderer picks it up with the next frame
+                            // for this game only: the renderer picks it up with the next frame. settings.xml belongs
+                            // to the main process, this one doesn't save it
                             NativeSettings.setFrameGenerationEnabled(enabled)
-                            NativeSettings.saveSettings()
                             closeDrawer()
                         },
                         updateState = {
