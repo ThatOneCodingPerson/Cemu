@@ -248,3 +248,47 @@ Format: date · what was done · what's next · open questions. Keep each entry 
 **Checked:**
 - Cocoon (cocoon-shell.com) is an Android frontend for dual-screen handhelds with a Wii U platform (read 2026-09-30).
 - Frontends start games through `info.cemu.cemu/.emulation.EmulationActivity` with an ACTION_VIEW content URI. This fork keeps that.
+
+## 2026-09-30, session 5 (drivers, frame generation)
+**Owner requests:**
+- An in-game "Lossless scaling system", with Eden's nightly builds as the reference.
+- The driver settings should tell users that the default (system) driver runs almost every Wii U game, and that a different driver is better set per game. Balemuni's Apex drivers (github.com/Balemuni/Balemunis-Aurora) go into the download list.
+- **Answers:** port Eden's code, so the app is GPL-3.0 from now on (noted in the README). The owner owns Lossless Scaling and tests with their own `Lossless.dll`.
+
+**Commits** (each built as a dev APK; the JVM tests pass):
+- 06d9f8ff Balemuni Apex in the driver list. A note card in Custom drivers and in the download screen, "System driver (default, recommended)", a reminder snackbar when a driver is picked for all games, and a hint under Settings > Graphics > Custom drivers.
+- 5facdb3f Frame generation:
+  - `Renderer/Vulkan/FrameGen/`, the port of Eden's LSFG.
+  - The device features are enabled from the shaders' SPIR-V, only when the DLL is installed.
+  - The present path, settings, the in-game checkbox, and the GPL-3.0 switch (README, `LICENSE.GPL-3.0.txt`).
+- 60527e1d Even pacing with `VK_GOOGLE_display_timing`; the in-game toggle is per game (the emulation process doesn't save `settings.xml`); a "Frame generation on" notice and a "Shown" FPS overlay line.
+- Notes: this commit.
+
+**Artifact:** `dist/android/output/Cemu-latest-dev.apk`, built from this notes commit. The device test lists are at session 5, items 1 and 2, in TODO.md.
+
+**Research (all 2026-09-30):**
+- Eden master: the frame_gen and lsfg sources (listed in FEATURE_RESEARCH §12), its settings, and the Android Lossless manager UI.
+- AOSP frameworks/native:
+  - `vulkan/libvulkan/swapchain.cpp`: `VkPresentTimeGOOGLE::desiredPresentTime` becomes `native_window_set_buffers_timestamp`, cast to int64.
+  - `libs/gui/Surface.cpp`: `mTimestamp` stays until it's set again, even across disconnects.
+- Balemunis-Aurora releases: V2 "Apex Edition", with Universal and Ultimate (SD8Gen2) zips, for Android 13+.
+- GPL-3.0 text: gnu.org answered 403. It was taken from Eden's `LICENSE.txt` instead; its SHA-256 matches gnu.org's `gpl-3.0.txt` (3972dc97…6986).
+
+**Lessons:**
+- In dev/release builds, games run in `:EmulationProcess`. Nothing changed in game may call `saveSettings()` (CLAUDE.md, Processes), so the in-game frame generation switch only lasts for that game.
+- Once a buffer timestamp is set on a `Surface`, it stays for every later frame. A `desiredPresentTime` of 0 doesn't clear it; `INT64_MIN` (AUTO) does.
+- clang refuses `return voidFunction();` in a constructor, and `cemu_assert_debug(unique_ptr)` needs an explicit bool.
+
+**Open questions for the owner:**
+- The frame generation device test (TODO, session 5, item 2), above all:
+  - Does it turn on with your `Lossless.dll`? If not, an overlay message says why.
+  - How does 2x look on the Thor's 120 Hz screen?
+- Push `android-stability`? It's 4 commits ahead of `origin` (06d9f8ff to this notes commit).
+- Save states: still open from session 4.
+
+**Next:**
+- The device test results for the drivers and frame generation.
+- Possible frame generation follow-ups:
+  - a per-game setting (game profile);
+  - centering the generated frames by measuring the GPU time of frame 0;
+  - a dump of the passes for debugging (Eden's `frame_gen_dump_flow`).

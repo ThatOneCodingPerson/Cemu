@@ -441,6 +441,59 @@ The owner asked for "vulkan/openGL options and other graphical settings that can
 - RCAS sharpening with a strength slider.
 - Letting graphic-pack presets change while a game runs. Cemu needs a restart for most packs.
 
+## 12. Frame generation, "Lossless Scaling" (owner request, session 5, 2026-09-30)
+The owner asked for "an in-game Lossless scaling system", with Eden's nightly builds (git.eden-emu.dev/eden-ci/nightly/releases) as the reference.
+
+**Decisions (owner, 2026-09-30):**
+- Port Eden's code (GPL-3.0-or-later) with its headers and credit. The app as a whole is distributed under the GPL-3.0 from now on: `README.md` License section, `LICENSE.GPL-3.0.txt` (the gnu.org text, SHA-256 3972dc97…6986). Cemu's MPL-2.0 files stay MPL; MPL 2.0 §3.3 allows a GPL "Larger Work".
+- The owner owns Lossless Scaling and tests with their own `Lossless.dll`. Cemu ships no shaders.
+
+**Sources** (read 2026-09-30, Eden master):
+- `src/video_core/frame_gen/lossless_dll.*`, `lsfg_translate.*`
+- `src/video_core/renderer_vulkan/present/`: `lsfg_common`, `lsfg_shaders`, `lsfg_mipmaps`, `lsfg_alpha`, `lsfg_beta`, `lsfg_gamma`, `lsfg_delta`, `lsfg_generate`, `lsfg_chain`, `frame_gen`, `frame_gen_pacer`, `util.cpp`
+- Presentation: `renderer_vulkan.cpp` Composite, `vk_present_manager.cpp`
+- Settings: `common/settings.h` (`frame_gen*`)
+- Android UI: `LosslessManagerFragment.kt`, `LosslessScalingHelper.kt`
+- Eden's lsfg files also credit lsfg-vk (GPL-3.0-or-later in their headers). lsfg-vk v2 itself is CC BY-NC-ND and is not used.
+
+**How Eden's frame generation works:**
+- `Lossless.dll` is parsed as a PE file. Its RCDATA resources hold SPIR-V compute shaders. Eden uses the half-precision variants (resource id + 49) of ids 255 (mipmaps), 256 (generate) and 280–302. The descriptor bindings are renumbered 0…n in (set, binding) order, and each pass binds one descriptor per binding.
+- Passes shared by all generated frames, per rendered frame:
+  - mipmaps: luminance at 7 levels, at the flow scale
+  - alpha: 4 stages per level, with a 3-frame history
+  - beta: 5 stages, 6 outputs
+- Per generated frame: gamma (5 stages per level, coarse to fine), delta (10 stages, from level 4) and generate, which warps the previous and current frames along the motion.
+- The constants of each (generation count, generation) pair are fixed in small uniform buffers; the timestamp is (g+1)/(n+1).
+- Some descriptors are null, so it needs robustness2 `nullDescriptor`, plus `shaderFloat16` and `vulkanMemoryModel`.
+- Presentation: `[generated…, real]` back to back, FIFO spaces them out. The pacer either uses the fixed multiplier, or with a target rate raises the generation count while that brings the output closer to the target, and lowers it if the emulation slows down.
+- Automatic flow scale: the game's rendered width over its width on screen, in 5% steps, 25–100%.
+
+**Cemu port (`src/Cafe/HW/Latte/Renderer/Vulkan/FrameGen/`, Android only):**
+- Eden's `vk::` wrappers are replaced with plain handles, and memory comes from `VKRMemoryManager`. Vulkan errors throw, and `FrameGenerator` turns frame generation off with an overlay notification.
+- `FrameGenDevice` (new): reads the modules' SPIR-V version, `OpCapability` and `OpExtension` before the device is created, and enables exactly those features, plus robustness2 `nullDescriptor`. Without `Lossless.dll` the device is created as before. If `vkCreateDevice` fails with them, it retries without.
+- Cemu draws the TV picture (and ImGui) straight into the swapchain image, so `VulkanRenderer::PresentGeneratedFrames` works on that image:
+  1. Copy the finished frame into the passes' input. A blit converts BGRA; Android swapchains are usually RGBA8, which only needs a copy.
+  2. The acquired image goes out with generated frame 0. Each further generated frame gets a newly acquired image.
+  3. The finished frame is copied back into a last acquired image and presented as usual.
+  - That way only one swapchain image is ever acquired, as Cemu assumes elsewhere.
+- The TV swapchain gets `TRANSFER_SRC`, FIFO and one spare image while frame generation is on. Switching it on or off recreates the swapchain, which is also when the passes are freed.
+- Settings are Android-only config values, and the renderer reads them every frame:
+  - `FrameGeneration`, `FrameGenMultiplier` (2–4), `FrameGenTargetRate` (0 = multiplier), `FrameGenFlowScale` (0 = automatic)
+- UI:
+  - Settings > Graphics > Frame generation: add, replace or remove `Lossless.dll` (checked natively, copied to `<user data>/lossless/`), the toggle, the mode (2x/3x/4x/adaptive up to 60, 90 or 120 FPS) and motion detail.
+  - In-game menu: a "Frame generation" checkbox, shown once a DLL is added. It only switches the running game: the emulation process never saves `settings.xml`, which belongs to the main process.
+
+**Limits and things to watch on the device:**
+- **Pacing:** FIFO alone shows each generated frame for one refresh. That's even when the output rate matches the screen (2x of 30 FPS at 60 Hz). On the Thor's 120 Hz screen, 2x would show the generated frame for 1 refresh and the real one for 3.
+  - Where the device has `VK_GOOGLE_display_timing` (enabled with the other frame generation features), presents get desired times. Generated frame 0 goes out right away; frame k at start + k × (frame time / (n+1)); the rendered frame gets the last slot.
+  - AOSP's swapchain hands the time to `native_window_set_buffers_timestamp` (frameworks/native `vulkan/libvulkan/swapchain.cpp` SetSwapchainFrameTimestamp, read 2026-09-30), and SurfaceFlinger holds the buffer until then.
+  - `Surface` keeps that timestamp for every later frame: `mTimestamp` only changes in `setBuffersTimestamp` (`libs/gui/Surface.cpp`, not even on disconnect). So the first present without pacing passes `INT64_MIN`, which is `NATIVE_WINDOW_TIMESTAMP_AUTO` after the swapchain's int64 cast, to go back to automatic timestamps.
+  - The GPU time spent generating frame 0 still shortens its slot a little.
+- **Overlay:** "Frame generation on" when it starts. With the FPS overlay, a "Shown: N FPS (frame generation)" line counts presented frames, generated ones included.
+- It adds about one frame of latency, since the real frame waits for the generated ones. The GPU work runs on the emulation's queue, so a GPU-bound game gets slower.
+- The overlay and notifications are part of the captured frame and get interpolated too.
+- Untested on a device so far (owner test, TODO session 5 item 2).
+
 ## Gap table
 Only facts verified from the sources above are marked. `✓` = has it, `–` = verified absent, `?` = not verified yet, `partial` = see notes.
 

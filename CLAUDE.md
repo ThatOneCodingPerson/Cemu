@@ -130,9 +130,15 @@
 - **Key cache:** `g_keyCache` is append-only (a deque) because `KeyCache_Reload` adds keys while the title scan reads them; never clear it outside `KeyCache_Prepare`.
 - **Controller profiles:** after `InputManager::load` replaces an emulated controller, call `EmulatedControllerManager::GetController(i).Reload()`, or later edits go to the discarded object.
 - **Android-only core additions** sit behind `#if BOOST_PLAT_ANDROID` so desktop builds are unchanged:
-  - overlay battery/thermal/frame time, KeyCache_Reload, `Latte_SetPrecompileOnly`, `FileCache_WaitForAsyncWrites`
-  - the config values `vk_pre_rotation`, `anisotropic_filter`, and the `kFsrEasuFilter` upscale filter
+  - overlay battery/thermal/frame time and the frame generation "Shown" FPS, KeyCache_Reload, `Latte_SetPrecompileOnly`, `FileCache_WaitForAsyncWrites`
+  - the config values `vk_pre_rotation`, `anisotropic_filter`, `frame_gen*`, and the `kFsrEasuFilter` upscale filter
   - `EmulatedController::get_mapping_button`
+  - frame generation (`Renderer/Vulkan/FrameGen/`, only compiled for Android)
+- **Licensing:** `Renderer/Vulkan/FrameGen/` is ported from the Eden emulator under the GPL-3.0-or-later, so the app is distributed under the GPL-3.0 (owner decision 2026-09-30; README License section, `LICENSE.GPL-3.0.txt`). Keep the SPDX headers and Eden/lsfg-vk credits in those files. Never ship Lossless Scaling's shaders: the user adds their own `Lossless.dll`.
+- **Frame generation** (`VulkanRenderer::PresentGeneratedFrames`, FEATURE_RESEARCH §12):
+  - The device features it needs are enabled only when `Lossless.dll` is installed (`FrameGen::DeviceSetup`). Without it, the device is created exactly as before.
+  - While it's on, the TV swapchain is FIFO with `TRANSFER_SRC` and a spare image. Generated frames are copied in, and only one swapchain image is acquired at a time.
+  - The in-game toggle changes only the emulation process's config; it never saves `settings.xml` (see Processes).
 - **Vulkan pre-rotation** (`SwapchainInfoVk`, opt-in `vkPreRotation`):
   - With it on, a swapchain image can be rotated against the window. `getExtent()` is the image size; `getLogicalExtent()` is the window size.
   - Everything is still laid out in window coordinates and mapped at the end: `ToImageViewport` for the output quad (plus the vertex shader's specialization constant), `RotateImguiDrawData` for ImGui.

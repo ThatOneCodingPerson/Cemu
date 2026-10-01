@@ -9,9 +9,25 @@
 
 Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" section below and in `PHASE2_DESIGN.md`.
 
-**Working branch:** `android-stability` (from `android-port-dual` 564bfdad). It has no upstream. Ask before any push or merge.
+**Working branch:** `android-stability` (from `android-port-dual` 564bfdad), pushed to `origin` (ThatOneCodingPerson/Cemu). Ask before any push or merge.
 
 ## Current focus
+- **Session 5 (2026-09-30), owner requests:**
+  1. [?] GPU drivers (2026-09-30, 06d9f8ff): Balemuni's Aurora repo ("Apex Edition" Turnip, github.com/Balemuni/Balemunis-Aurora) in the download list; a note in the driver settings that the default (system) driver runs almost every Wii U game, and that a different driver is better set per game.
+     - **Device test:**
+       - Settings > Graphics: "Custom drivers" shows the one-line hint.
+       - Custom drivers: the note card is on top, and the first entry reads "System driver (default, recommended)". Picking an installed driver shows the "used for every game" reminder.
+       - Download icon: the note card is on top, and a "Balemuni Apex" chip lists V2 with the Universal and Ultimate SD8Gen2 zips. Downloading the Ultimate zip on the Thor says "Driver installed successfully. Pick it for a game…", with "Use for all games".
+       - Long-press a game > Edit game profile > Custom driver lists the downloaded Apex driver.
+  2. [?] Frame generation ("Lossless Scaling", like Eden) (2026-09-30, 5facdb3f, 60527e1d): the user imports their own `Lossless.dll` (Lossless Scaling, Steam); an in-game toggle. The owner chose to port Eden's GPL-3.0 code, so the app as a whole is distributed under GPL-3.0 from then on (README License section, `LICENSE.GPL-3.0.txt`). The owner owns Lossless Scaling and tests it. Design and limits: FEATURE_RESEARCH §12.
+     - **Device test** (the log is game list menu > Share log file):
+       - Settings > Graphics > Frame generation > "Add Lossless.dll": pick `Lossless.dll` from the Lossless Scaling folder. It reads "Lossless.dll added". Another file (any other DLL, a text file) shows an error instead.
+       - Turn on Frame generation, mode 2x, and start a 30 FPS game (BotW, Wind Waker HD, Xenoblade X). A "Frame generation on" notification appears and motion looks smoother. With the FPS overlay on, a "Shown: N FPS (frame generation)" line reads about twice the FPS line. The log has "Frame generation: Lossless.dll loaded…" and "Frame generation: WxH, optical flow at N%".
+       - In-game menu > "Frame generation" switches it off and on while playing: one black frame at most, no crash. The GamePad screen keeps working. The switch only lasts for that game (settings.xml belongs to the main process); the next game starts with the Settings value.
+       - On the Thor's 120 Hz screen, 2x should look evenly paced, not stuttering between short and long frames. The log line "Frame generation: Lossless.dll loaded…" says whether display timing is supported, which does the spacing. Compare with "Adaptive, up to 120 FPS" and 4x. Also check that "Motion detail" 25% vs 100% changes the GPU load.
+       - Turn frame generation off in game, then play on for a minute: the frame rate and smoothness are as before (the screen goes back to automatic frame times).
+       - If it doesn't turn on, an overlay message says why ("Frame generation is not available: …"). Send the log.
+       - Without a DLL: no in-game checkbox, the toggles in Settings are greyed out, and games start as before. "Remove Lossless.dll" turns frame generation off.
 - **Testing (owner, 2026-09-29):** the owner installs and tests the APKs themselves. No adb from Claude: build without `-Install`, hand over `dist/android/output/Cemu-latest-dev.apk` plus the device test list, and mark items `[?]`.
 - **Session 4 (2026-09-29), working order** (the owner reprioritized: save states and graphics options first, the second screen last):
   1. [x] Commit the pending work: shader compile per game (706e1979), adaptive ADPF target (dbf60105).
@@ -20,7 +36,8 @@ Bug IDs refer to `BUGS.md`. The full plan and rationale are in the "Phases" sect
   4. [?] Per-game overlay layouts (#5, 7c177945).
   5. [?] Per vendor:product controller profiles (#2), see the backlog item.
   6. [?] Display picker, with a Settings entry (#4, 2aac0ca9).
-- **Latest APK (end of session 4):** `dist/android/output/Cemu-0.5.1-2aac0ca9-dev.apk` (= `Cemu-latest-dev.apk`). It contains everything above.
+- **Latest APK (session 5):** `dist/android/output/Cemu-latest-dev.apk`, built from the commit that adds this line. It contains everything above, including the session 5 drivers and frame generation.
+- **Earlier APK (end of session 4):** `dist/android/output/Cemu-0.5.1-2aac0ca9-dev.apk`.
 - **Owner decisions (2026-09-29):**
   - #6 single-file WUA/WUP install: dropped. Cemu runs .wua/.wud/.wux and WUP folders from a games folder, and adding that folder as a game path covers it.
   - #4: only the display picker. "Mirror the main screen" and "input overlay on the second screen" are not planned. The performance overlay already draws on both screens.
